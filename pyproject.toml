@@ -1,0 +1,22 @@
+[project]
+name = "pyagent"
+version = "0.1.0"
+description = "Small, modular coding-agent harness for Python"
+requires-python = ">=3.10"
+dependencies = ["openai>=1.50"]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 80
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]

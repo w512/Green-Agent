@@ -1,0 +1,6 @@
+
+docs/
+example/
+config.py
+__pycache__
+*.pyc
