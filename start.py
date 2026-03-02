@@ -51,6 +51,7 @@ def main() -> int:
         print(warn("Created config.py"))
 
     import config
+    from agent.tools import Environment, load_tools
     from agent.workspace import Workspace
 
     extra = sys.argv[1:]
@@ -60,16 +61,18 @@ def main() -> int:
 
     root = resolve_root(extra[0] if extra else None)
     workspace = Workspace(root)
+    registry = load_tools(Environment(workspace))
 
     print(f"Workspace: {workspace.root}")
     print(f"Git root:  {workspace.git_root or '(not a git repo)'}")
+    print(f"Tools:     {', '.join(registry) or '(none)'}")
 
     if not (config.API_KEY or "").strip():
         print(error("\nAPI_KEY is not set.\n"))
         print(USAGE)
         return 1
 
-    print(warn("\nAgent loop is not implemented yet (phase 1)."))
+    print(warn("\nAgent loop is not implemented yet (phase 2)."))
     return 0
 
 

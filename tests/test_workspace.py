@@ -149,6 +149,14 @@ class TestResolveExistingPath:
         assert info.is_directory and not info.is_file
 
 
+class TestRelative:
+    def test_root_is_empty(self, ws: Workspace) -> None:
+        assert ws.relative(ws.root) == ""
+
+    def test_nested_is_posix(self, ws: Workspace) -> None:
+        assert ws.relative(ws.root / "sub" / "nested.txt") == "sub/nested.txt"
+
+
 class TestSymlinkedRoot:
     def test_files_resolve_through_symlinked_root(self, tmp_path: Path) -> None:
         actual = tmp_path / "actual"

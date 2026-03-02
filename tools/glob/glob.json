@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "glob",
+    "description": "Find files by name pattern (e.g. **/*.py). Prefer over bash find/ls. Skips .git, node_modules, __pycache__, virtualenvs, and cache directories.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Glob pattern with *, **, and ? support. Matches the whole relative path or the file name."
+        },
+        "path": {
+          "type": "string",
+          "description": "Optional subdirectory relative to the workspace. Default: workspace root."
+        }
+      },
+      "required": ["pattern"]
+    }
+  }
+}

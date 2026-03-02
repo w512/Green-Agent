@@ -58,6 +58,11 @@ class Workspace:
         self.real_root = Path(os.path.realpath(lexical_root))
         self.git_root = find_git_root(lexical_root)
 
+    def relative(self, target: Path) -> str:
+        """Posix path of `target` relative to the root; "" for the root."""
+        rel = os.path.relpath(target, self.root)
+        return "" if rel == "." else rel.replace(os.sep, "/")
+
     def _resolve(self, relative_path: object, *, must_exist: bool) -> Path:
         if not isinstance(relative_path, str) or not relative_path:
             raise WorkspaceError("Path must be a non-empty string.")

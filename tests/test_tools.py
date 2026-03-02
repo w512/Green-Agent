@@ -1,0 +1,192 @@
+"""Tool registry: discovery, validation, and normalization."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from agent.tools import (
+    Environment,
+    Tool,
+    ToolLoadError,
+    definitions,
+    load_tools,
+    normalize_tool,
+)
+from agent.workspace import Workspace
+
+GOOD_JSON = {
+    "type": "function",
+    "function": {"name": "echo", "parameters": {"type": "object"}},
+}
+
+GOOD_PY = """
+class EchoTool:
+    needs_approval = True
+    trust = "command"
+
+    def __init__(self, env):
+        self.root = env.workspace.root
+
+    def describe(self, args):
+        return f"echo {args.get('text')}"
+
+    def execute(self, args):
+        return args.get("text", "")
+
+
+def create_tool(env):
+    return EchoTool(env)
+"""
+
+
+def make_tool(tools_dir: Path, name: str, py: str, spec: object) -> Path:
+    tool_dir = tools_dir / name
+    tool_dir.mkdir(parents=True)
+    (tool_dir / f"{name}.py").write_text(py)
+    text = spec if isinstance(spec, str) else json.dumps(spec)
+    (tool_dir / f"{name}.json").write_text(text)
+    return tool_dir
+
+
+@pytest.fixture()
+def env(tmp_path: Path) -> Environment:
+    root = tmp_path / "ws"
+    root.mkdir()
+    return Environment(Workspace(root))
+
+
+class TestBuiltinRegistry:
+    def test_loads_phase_two_tools(self, registry: dict[str, Tool]) -> None:
+        assert set(registry) == {"read", "glob", "grep"}
+
+    def test_definitions_shape(self, registry: dict[str, Tool]) -> None:
+        for name, tool in registry.items():
+            assert tool.definition["type"] == "function"
+            assert tool.definition["function"]["name"] == name
+            params = tool.definition["function"]["parameters"]
+            assert params["type"] == "object"
+        assert len(definitions(registry)) == len(registry)
+
+    def test_read_only_tools_need_no_approval(
+        self, registry: dict[str, Tool]
+    ) -> None:
+        for tool in registry.values():
+            assert tool.needs_approval is False
+            assert tool.trust({}) == "path"
+
+
+class TestDiscovery:
+    def test_custom_tool(self, tmp_path: Path, env: Environment) -> None:
+        tools_dir = tmp_path / "tools"
+        make_tool(tools_dir, "echo", GOOD_PY, GOOD_JSON)
+        registry = load_tools(env, tools_dir)
+        tool = registry["echo"]
+        assert tool.needs_approval is True
+        assert tool.trust({}) == "command"
+        assert tool.describe({"text": "hi"}) == "echo hi"
+        assert tool.execute({"text": "hi"}) == "hi"
+
+    def test_skips_files_and_incomplete_dirs(
+        self, tmp_path: Path, env: Environment
+    ) -> None:
+        tools_dir = tmp_path / "tools"
+        tools_dir.mkdir()
+        (tools_dir / "README.md").write_text("docs")
+        (tools_dir / "nojson").mkdir()
+        (tools_dir / "nojson" / "nojson.py").write_text("x = 1")
+        (tools_dir / "nopy").mkdir()
+        (tools_dir / "nopy" / "nopy.json").write_text("{}")
+        assert load_tools(env, tools_dir) == {}
+
+    def test_skips_module_without_factory(
+        self, tmp_path: Path, env: Environment
+    ) -> None:
+        tools_dir = tmp_path / "tools"
+        make_tool(tools_dir, "echo", "VALUE = 1\n", GOOD_JSON)
+        assert load_tools(env, tools_dir) == {}
+
+    def test_skips_factory_without_execute(
+        self, tmp_path: Path, env: Environment
+    ) -> None:
+        tools_dir = tmp_path / "tools"
+        py = "def create_tool(env):\n    return object()\n"
+        make_tool(tools_dir, "echo", py, GOOD_JSON)
+        assert load_tools(env, tools_dir) == {}
+
+    def test_malformed_json_raises(
+        self, tmp_path: Path, env: Environment
+    ) -> None:
+        tools_dir = tmp_path / "tools"
+        make_tool(tools_dir, "echo", GOOD_PY, "{not json")
+        with pytest.raises(ToolLoadError, match="Cannot read"):
+            load_tools(env, tools_dir)
+
+    @pytest.mark.parametrize(
+        "spec",
+        [
+            {"type": "tool", "function": {"name": "echo"}},
+            {"type": "function", "function": {}},
+            {"type": "function"},
+            [],
+        ],
+    )
+    def test_invalid_shape_raises(
+        self, tmp_path: Path, env: Environment, spec: object
+    ) -> None:
+        tools_dir = tmp_path / "tools"
+        make_tool(tools_dir, "echo", GOOD_PY, spec)
+        with pytest.raises(ToolLoadError, match="Invalid tool definition"):
+            load_tools(env, tools_dir)
+
+    def test_duplicate_name_raises(
+        self, tmp_path: Path, env: Environment
+    ) -> None:
+        tools_dir = tmp_path / "tools"
+        make_tool(tools_dir, "a", GOOD_PY, GOOD_JSON)
+        make_tool(tools_dir, "b", GOOD_PY, GOOD_JSON)
+        with pytest.raises(ToolLoadError, match="Duplicate tool name"):
+            load_tools(env, tools_dir)
+
+    def test_factory_receives_environment(
+        self, tmp_path: Path, env: Environment
+    ) -> None:
+        tools_dir = tmp_path / "tools"
+        py = (
+            "def create_tool(env):\n"
+            "    class T:\n"
+            "        def execute(self, args):\n"
+            "            return str(env.workspace.root)\n"
+            "    return T()\n"
+        )
+        make_tool(tools_dir, "echo", py, GOOD_JSON)
+        registry = load_tools(env, tools_dir)
+        assert registry["echo"].execute({}) == str(env.workspace.root)
+
+
+class TestNormalize:
+    def test_defaults(self) -> None:
+        class Impl:
+            def execute(self, args: dict) -> str:
+                return "ok"
+
+        tool = normalize_tool(Impl(), GOOD_JSON)
+        assert tool.name == "echo"
+        assert tool.needs_approval is False
+        assert tool.trust({}) == "always"
+        assert tool.describe({}) == "echo"
+        assert tool.execute({}) == "ok"
+
+    def test_callable_trust(self) -> None:
+        class Impl:
+            def trust(self, args: dict) -> str:
+                return "command" if "command" in args else "path"
+
+            def execute(self, args: dict) -> str:
+                return ""
+
+        tool = normalize_tool(Impl(), GOOD_JSON)
+        assert tool.trust({"command": "ls"}) == "command"
+        assert tool.trust({"path": "x"}) == "path"
