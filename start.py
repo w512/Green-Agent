@@ -50,13 +50,20 @@ def main() -> int:
     if created:
         print(warn("Created config.py"))
 
-    import config
+    from agent.llm import ConfigError, create_provider
     from agent.tools import Environment, load_tools
     from agent.workspace import Workspace
 
     extra = sys.argv[1:]
     if len(extra) > 1:
         print(error("Usage: python start.py [project-root]"))
+        return 1
+
+    try:
+        provider = create_provider(log=lambda text: print(warn(text)))
+    except ConfigError as failure:
+        print(error(f"{failure}\n"))
+        print(USAGE)
         return 1
 
     root = resolve_root(extra[0] if extra else None)
@@ -66,13 +73,9 @@ def main() -> int:
     print(f"Workspace: {workspace.root}")
     print(f"Git root:  {workspace.git_root or '(not a git repo)'}")
     print(f"Tools:     {', '.join(registry) or '(none)'}")
+    print(f"Model:     {provider.model}")
 
-    if not (config.API_KEY or "").strip():
-        print(error("\nAPI_KEY is not set.\n"))
-        print(USAGE)
-        return 1
-
-    print(warn("\nAgent loop is not implemented yet (phase 2)."))
+    print(warn("\nAgent loop is not implemented yet (phase 3)."))
     return 0
 
 
