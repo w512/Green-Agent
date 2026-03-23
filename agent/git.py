@@ -33,6 +33,15 @@ def find_git_root(cwd: Path) -> Path | None:
     return Path(os.path.abspath(root))
 
 
+def is_tracked(repo: Path, file_path: Path) -> bool:
+    """True when `file_path` is in the index of the repository at `repo`."""
+    try:
+        _git(["ls-files", "--error-unmatch", "--", str(file_path)], repo)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return True
+
+
 @dataclass(frozen=True)
 class GitInfo:
     name: str

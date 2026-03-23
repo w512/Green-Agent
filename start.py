@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import shutil
 import sys
@@ -18,11 +19,14 @@ PREVIEW_LINES = 8
 PREVIEW_CHARS = 600
 EXIT_WORDS = frozenset({"exit", "quit", "q"})
 
-USAGE = """Usage: python start.py [project-root]
-
-Set API_KEY, BASE_URL, and MODEL in config.py.
+USAGE = """Set API_KEY, BASE_URL, and MODEL in config.py.
 Any OpenAI-compatible Chat Completions provider works.
 Type a task at the prompt; 'exit' or Ctrl-D quits."""
+
+APPROVAL_HINT = (
+    "Writes and shell commands may ask for approval: "
+    "y = once, a = always this session, Enter = deny."
+)
 
 
 # --- output -----------------------------------------------------------------
@@ -110,6 +114,38 @@ def resolve_root(arg: str | None) -> Path:
     return root
 
 
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="start.py",
+        description="Terminal chat with a coding agent.",
+        epilog=USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "root", nargs="?", help="project directory (default: current)"
+    )
+    parser.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="auto-approve every tool call (non-interactive runs)",
+    )
+    return parser.parse_args(argv)
+
+
+def console_ask(description: str) -> Any:
+    from agent.permissions import Decision, parse_answer
+
+    if not sys.stdin.isatty():
+        print(warn("No terminal to confirm; denying. Use --yes to allow."))
+        return Decision.DENY
+    try:
+        answer = input(warn(f"\nApprove: {description}? [y/N/a] "))
+    except EOFError:
+        return Decision.DENY
+    return parse_answer(answer)
+
+
 # --- chat -------------------------------------------------------------------
 
 
@@ -155,15 +191,12 @@ def main() -> int:
     if ensure_config():
         print(warn("Created config.py"))
 
-    from agent.agent import AllowAll
     from agent.llm import ConfigError, create_provider
+    from agent.permissions import Permissions
     from agent.tools import Environment, load_tools
     from agent.workspace import Workspace
 
-    extra = sys.argv[1:]
-    if len(extra) > 1:
-        print(error("Usage: python start.py [project-root]"))
-        return 1
+    args = parse_args(sys.argv[1:])
 
     try:
         provider = create_provider(log=lambda text: print(warn(text)))
@@ -172,18 +205,23 @@ def main() -> int:
         print(USAGE)
         return 1
 
-    root = resolve_root(extra[0] if extra else None)
-    workspace = Workspace(root)
+    workspace = Workspace(resolve_root(args.root))
     registry = load_tools(Environment(workspace))
+    permissions = Permissions(workspace, auto_approve=args.yes, ask=console_ask)
 
     print(f"Workspace: {workspace.root}")
     print(f"Git root:  {workspace.git_root or '(not a git repo)'}")
     print(f"Tools:     {', '.join(registry) or '(none)'}")
     print(f"Model:     {provider.model}")
+    if args.yes:
+        print(warn("Auto-approve is on: every tool call runs unasked."))
+    elif permissions.trust_root is None:
+        print(dim("Not a git repository: every write or command will ask."))
+    else:
+        print(dim(APPROVAL_HINT))
     print(dim("Type a task; 'exit' or Ctrl-D to quit."))
 
-    # Phase 5 replaces AllowAll with interactive permissions.
-    return chat(provider, registry, AllowAll())
+    return chat(provider, registry, permissions)
 
 
 if __name__ == "__main__":
