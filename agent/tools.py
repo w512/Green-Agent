@@ -5,8 +5,9 @@ A tool directory contributes:
 - `{name}.json` — OpenAI function definition sent to the model;
 - `{name}.py` — a module exposing `create_tool(env)` that returns an
   object with `execute(args)` and optional attributes `needs_approval`
-  (bool, default False), `trust` ("path" | "command" | "always", or a
-  callable of args; default "always"), and `describe(args) -> str`.
+  (bool or callable of args, default False), `trust` ("path" | "command"
+  | "always", or a callable of args; default "always"), and
+  `describe(args) -> str`.
 
 Directories that do not fit this shape are skipped silently; malformed
 JSON or duplicate tool names raise.
@@ -47,17 +48,16 @@ class Environment:
 class Tool:
     name: str
     definition: dict[str, Any]
-    needs_approval: bool
+    needs_approval: Callable[[Args], bool]
     trust: Callable[[Args], TrustKind]
     describe: Callable[[Args], str]
     execute: Callable[[Args], object]
 
 
-def _as_trust(trust: object) -> Callable[[Args], TrustKind]:
-    if callable(trust):
-        return trust
-    kind = str(trust)
-    return lambda _args: kind
+def _as_callable(value: object) -> Callable[[Args], Any]:
+    if callable(value):
+        return value
+    return lambda _args: value
 
 
 def normalize_tool(impl: object, definition: dict[str, Any]) -> Tool:
@@ -65,11 +65,14 @@ def normalize_tool(impl: object, definition: dict[str, Any]) -> Tool:
     describe = getattr(impl, "describe", None)
     if not callable(describe):
         describe = lambda _args: name  # noqa: E731
+    needs_approval = getattr(impl, "needs_approval", False)
+    if not callable(needs_approval):
+        needs_approval = needs_approval is True
     return Tool(
         name=name,
         definition=definition,
-        needs_approval=getattr(impl, "needs_approval", False) is True,
-        trust=_as_trust(getattr(impl, "trust", "always")),
+        needs_approval=_as_callable(needs_approval),
+        trust=_as_callable(getattr(impl, "trust", "always")),
         describe=describe,
         execute=impl.execute,  # type: ignore[attr-defined]
     )

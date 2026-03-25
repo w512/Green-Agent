@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "delete",
+    "description": "Delete one regular file in the workspace. Does not remove directories or symlinks. Prefer over shell rm.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "File path relative to the workspace root."
+        }
+      },
+      "required": ["path"]
+    }
+  }
+}

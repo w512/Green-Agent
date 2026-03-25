@@ -1,0 +1,25 @@
+{
+  "type": "function",
+  "function": {
+    "name": "edit",
+    "description": "Replace exactly one unique text fragment in an existing UTF-8 file. old_text must match the file byte-for-byte (indentation included) and occur exactly once; include surrounding lines to disambiguate. For several fragments in one file use patch.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "File path relative to the workspace root."
+        },
+        "old_text": {
+          "type": "string",
+          "description": "Exact existing text to replace. Must occur exactly once."
+        },
+        "new_text": {
+          "type": "string",
+          "description": "Replacement text (may be empty to delete the fragment)."
+        }
+      },
+      "required": ["path", "old_text", "new_text"]
+    }
+  }
+}

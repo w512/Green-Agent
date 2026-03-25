@@ -1,0 +1,40 @@
+{
+  "type": "function",
+  "function": {
+    "name": "todo",
+    "description": "Track a task list for multi-step work within this session. merge=true (default) upserts items by id; merge=false replaces the whole list. Returns the current list. Not needed for single-step tasks.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "todos": {
+          "type": "array",
+          "description": "Task items.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Stable item id, e.g. \"1\" or \"tests\"."
+              },
+              "content": {
+                "type": "string",
+                "description": "Short task description."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["pending", "in_progress", "completed", "cancelled"],
+                "description": "Task status."
+              }
+            },
+            "required": ["id", "content", "status"]
+          }
+        },
+        "merge": {
+          "type": "boolean",
+          "description": "Upsert by id when true (default). Replace the list when false."
+        }
+      },
+      "required": ["todos"]
+    }
+  }
+}

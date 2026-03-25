@@ -92,7 +92,7 @@ def make_tool(name: str, execute: Any, needs_approval: bool = False) -> Tool:
     return Tool(
         name=name,
         definition={"type": "function", "function": {"name": name}},
-        needs_approval=needs_approval,
+        needs_approval=lambda _args: needs_approval,
         trust=lambda _args: "always",
         describe=lambda _args: name,
         execute=execute,

@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "bash",
+    "description": "Run a shell command with the workspace root as the working directory and return exit code, stdout, and stderr. Use for tests, builds, git, package managers, and anything no dedicated tool covers. Non-interactive: stdin is closed, pagers are disabled. Prefer read, grep, glob, write, edit, patch, and delete for workspace files.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Shell (bash) command line to execute."
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "description": "Kill the command after this many seconds. Default 30, max 600. Raise it for slow test suites or builds."
+        }
+      },
+      "required": ["command"]
+    }
+  }
+}

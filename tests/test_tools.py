@@ -58,9 +58,17 @@ def env(tmp_path: Path) -> Environment:
     return Environment(Workspace(root))
 
 
+ALL_TOOLS = {
+    "read", "glob", "grep",
+    "write", "edit", "patch", "delete",
+    "bash", "check", "fetch", "todo",
+}  # fmt: skip
+READ_ONLY = {"read", "glob", "grep", "todo"}
+
+
 class TestBuiltinRegistry:
-    def test_loads_phase_two_tools(self, registry: dict[str, Tool]) -> None:
-        assert set(registry) == {"read", "glob", "grep"}
+    def test_loads_all_tools(self, registry: dict[str, Tool]) -> None:
+        assert set(registry) == ALL_TOOLS
 
     def test_definitions_shape(self, registry: dict[str, Tool]) -> None:
         for name, tool in registry.items():
@@ -70,12 +78,33 @@ class TestBuiltinRegistry:
             assert params["type"] == "object"
         assert len(definitions(registry)) == len(registry)
 
-    def test_read_only_tools_need_no_approval(
-        self, registry: dict[str, Tool]
-    ) -> None:
-        for tool in registry.values():
-            assert tool.needs_approval is False
-            assert tool.trust({}) == "path"
+    def test_approval_flags(self, registry: dict[str, Tool]) -> None:
+        for name, tool in registry.items():
+            if name == "check":
+                continue
+            expected = name not in READ_ONLY
+            assert tool.needs_approval({"path": "x"}) is expected, name
+        # check: syntax-checking a file is free, project checks are not
+        assert registry["check"].needs_approval({"path": "x.py"}) is False
+        assert registry["check"].needs_approval({}) is True
+
+    def test_trust_kinds(self, registry: dict[str, Tool]) -> None:
+        kinds = {
+            name: tool.trust({"path": "x"}) for name, tool in registry.items()
+        }
+        assert kinds["bash"] == "command"
+        assert kinds["fetch"] == "always"
+        assert registry["check"].trust({}) == "always"
+        for name in (
+            "read",
+            "glob",
+            "grep",
+            "write",
+            "edit",
+            "patch",
+            "delete",
+        ):
+            assert kinds[name] == "path", name
 
 
 class TestDiscovery:
@@ -84,7 +113,7 @@ class TestDiscovery:
         make_tool(tools_dir, "echo", GOOD_PY, GOOD_JSON)
         registry = load_tools(env, tools_dir)
         tool = registry["echo"]
-        assert tool.needs_approval is True
+        assert tool.needs_approval({}) is True
         assert tool.trust({}) == "command"
         assert tool.describe({"text": "hi"}) == "echo hi"
         assert tool.execute({"text": "hi"}) == "hi"
@@ -174,7 +203,7 @@ class TestNormalize:
 
         tool = normalize_tool(Impl(), GOOD_JSON)
         assert tool.name == "echo"
-        assert tool.needs_approval is False
+        assert tool.needs_approval({}) is False
         assert tool.trust({}) == "always"
         assert tool.describe({}) == "echo"
         assert tool.execute({}) == "ok"

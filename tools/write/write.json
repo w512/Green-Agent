@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "write",
+    "description": "Create or completely overwrite a UTF-8 text file in the workspace. Parent directories are created. For changing part of an existing file use edit or patch instead.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "File path relative to the workspace root."
+        },
+        "content": {
+          "type": "string",
+          "description": "Complete new file contents."
+        }
+      },
+      "required": ["path", "content"]
+    }
+  }
+}

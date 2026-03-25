@@ -32,7 +32,7 @@ def make_tool(name: str, trust: str, needs_approval: bool = True) -> Tool:
     return Tool(
         name=name,
         definition={"type": "function", "function": {"name": name}},
-        needs_approval=needs_approval,
+        needs_approval=lambda _args: needs_approval,
         trust=lambda _args: trust,
         describe=lambda args: f"{name} {args}",
         execute=lambda _args: "ok",
@@ -225,6 +225,8 @@ class TestPathHeuristics:
             "curl http://example.com/x",
             "python -m pytest tests/",
             "OUT=dist/build make",
+            "cat x 2>/dev/null",
+            "ls > /dev/null",
         ]
         for command in inside:
             assert command_stays_inside(root, root, command), command

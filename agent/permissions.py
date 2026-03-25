@@ -249,12 +249,17 @@ def resolve_against(cwd: Path, token: str) -> Path:
     return Path(os.path.abspath(cwd / token))
 
 
+SAFE_PATHS = frozenset({"/dev/null", "/dev/stdout", "/dev/stderr"})
+
+
 def command_stays_inside(root: Path, cwd: Path, command: str) -> bool:
     """False if any path-like token leaves `root` or paths are opaque."""
     if OPAQUE_RE.search(command):
         return False
     for token in tokenize(command):
         candidate = unwrap_assignment(token)
+        if candidate in SAFE_PATHS:
+            continue
         if not looks_like_path(token) and not looks_like_path(candidate):
             continue
         if not is_inside(root, resolve_against(cwd, candidate)):
@@ -308,7 +313,7 @@ class Permissions:
         self._always: set[str] = set()
 
     def approve(self, tool: Tool, args: Args) -> bool:
-        if not tool.needs_approval or self.auto_approve:
+        if not tool.needs_approval(args) or self.auto_approve:
             return True
 
         kind = tool.trust(args)

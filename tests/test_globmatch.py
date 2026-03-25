@@ -36,6 +36,8 @@ def test_matches(path: str, pattern: str) -> None:
         ("aab.py", "a+b.py"),  # regex chars are literal
         ("app.pyc", "*.py"),
         ("src/app.py", "app"),
+        ("test_calc.py", "**/calc.py"),  # ** matches directories only
+        ("src/test_calc.py", "**/calc.py"),
     ],
 )
 def test_non_matches(path: str, pattern: str) -> None:

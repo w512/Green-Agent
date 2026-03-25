@@ -10,7 +10,9 @@ import re
 from functools import lru_cache
 
 _GLOB_TOKEN = re.compile(r"\*\*/?|\*|\?|[^*?]+")
-_GLOB_ATOM = {"**/": ".*", "**": ".*", "*": "[^/]*", "?": "[^/]"}
+# "**/" is zero or more whole directory components, so "**/x.py" does not
+# match "test_x.py"; a bare "**" matches anything including "/".
+_GLOB_ATOM = {"**/": "(?:.*/)?", "**": ".*", "*": "[^/]*", "?": "[^/]"}
 
 
 def to_posix(value: str) -> str:

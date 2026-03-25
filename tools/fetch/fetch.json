@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "fetch",
+    "description": "HTTP GET an http(s) URL and return status, final URL, and the text body. HTML is converted to plain text; JSON and other text types are returned as-is. Always requires approval. Not a search engine: use it for documentation pages or APIs whose URL you already know.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "http: or https: URL."
+        },
+        "max_chars": {
+          "type": "integer",
+          "description": "Max body characters to return. Default 30000, hard cap 60000."
+        }
+      },
+      "required": ["url"]
+    }
+  }
+}
