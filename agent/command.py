@@ -95,6 +95,10 @@ def _run(
         notice = f"Command exceeded the {timeout:g} second timeout."
         stderr = f"{_decode(err)}\n{notice}".strip()
         return format_result("timeout", _decode(out), stderr)
+    except BaseException:  # Ctrl-C and friends: do not orphan the child
+        _kill_tree(process)
+        process.wait()
+        raise
 
     return format_result(process.returncode, _decode(out), _decode(err))
 
