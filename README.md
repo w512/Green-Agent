@@ -132,3 +132,7 @@ network and any path the approval heuristics fail to recognise, and a model
 can be talked into running things. The approval layer is a safety net, not a
 sandbox. Do not point this at an untrusted task on a machine you care about,
 and keep `--yes` for disposable environments.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

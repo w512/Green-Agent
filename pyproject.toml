@@ -2,6 +2,7 @@
 name = "pyagent"
 version = "0.1.0"
 description = "Small, modular coding-agent harness for Python"
+license = "MIT"
 requires-python = ">=3.11"
 dependencies = ["openai>=1.50"]
 
