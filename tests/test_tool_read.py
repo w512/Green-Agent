@@ -55,6 +55,7 @@ def test_hard_cap(read: Tool, project: Path) -> None:
         ({"path": "README.md", "limit": 0}, "limit must be a positive"),
         ({"path": "README.md", "offset": "3"}, "offset must be a number"),
         ({"path": "README.md", "limit": True}, "limit must be a number"),
+        ({"path": "README.md", "limit": float("inf")}, "finite number"),
     ],
 )
 def test_bad_numbers(read: Tool, args: dict, message: str) -> None:

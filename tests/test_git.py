@@ -28,6 +28,21 @@ def test_repo_root(tmp_path: Path) -> None:
     assert root.name == tmp_path.name
 
 
+@needs_git
+def test_git_info_inside_repo(tmp_path: Path) -> None:
+    git = ["git", "-c", "user.email=t@t", "-c", "user.name=t"]
+    subprocess.run([*git, "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
+    (tmp_path / "a.txt").write_text("a")
+    subprocess.run([*git, "add", "."], cwd=tmp_path, check=True)
+    subprocess.run([*git, "commit", "-q", "-m", "c"], cwd=tmp_path, check=True)
+    info = load_git_info(tmp_path)
+    assert info.branch == "main"
+    assert len(info.hash) >= 7
+    assert info.dirty is False
+    (tmp_path / "b.txt").write_text("b")
+    assert load_git_info(tmp_path).dirty is True
+
+
 def test_git_info_outside_repo(tmp_path: Path) -> None:
     info = load_git_info(tmp_path)
     assert info.name == tmp_path.name

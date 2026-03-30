@@ -179,6 +179,19 @@ class TestDiscovery:
         with pytest.raises(ToolLoadError, match="Duplicate tool name"):
             load_tools(env, tools_dir)
 
+    def test_import_error_propagates_and_cleans_up(
+        self, tmp_path: Path, env: Environment
+    ) -> None:
+        import sys
+
+        tools_dir = tmp_path / "tools"
+        make_tool(
+            tools_dir, "broken", 'raise RuntimeError("boom")\n', GOOD_JSON
+        )
+        with pytest.raises(RuntimeError, match="boom"):
+            load_tools(env, tools_dir)
+        assert "pyagent_tools.broken" not in sys.modules
+
     def test_factory_receives_environment(
         self, tmp_path: Path, env: Environment
     ) -> None:

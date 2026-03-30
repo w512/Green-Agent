@@ -191,6 +191,11 @@ class TestHelpers:
         with pytest.raises(TypeError):
             message_to_dict(object())
 
+    def test_message_to_dict_accepts_dict(self) -> None:
+        source = {"role": "assistant", "content": "x"}
+        result = message_to_dict(source)
+        assert result == source and result is not source
+
     def test_initial_messages(self) -> None:
         fresh = initial_messages("t", "SYS", None)
         assert fresh == [

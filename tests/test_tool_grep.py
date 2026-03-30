@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import pytest
 
 from agent.tools import Tool
@@ -94,3 +97,9 @@ def test_bad_args(grep: Tool, args: dict, message: str) -> None:
 def test_path_escape(grep: Tool) -> None:
     with pytest.raises(WorkspaceError):
         grep.execute({"pattern": "x", "path": "../"})
+
+
+def test_symlink_target_is_rejected(grep: Tool, project: Path) -> None:
+    os.symlink(project / "README.md", project / "link.md")
+    with pytest.raises(ValueError, match="Not a file or directory"):
+        grep.execute({"pattern": "x", "path": "link.md"})

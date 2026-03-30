@@ -130,6 +130,10 @@ class TestWrite:
         result = write.execute({"path": "u.txt", "content": "привет"})
         assert result == "Created u.txt (12 B)."
 
+    def test_megabyte_size(self, write: Tool) -> None:
+        text = write.describe({"path": "big.bin", "content": "x" * 3_000_000})
+        assert text == "write big.bin (2.9 MB, new file)"
+
 
 # --- edit -------------------------------------------------------------------
 
@@ -193,6 +197,17 @@ class TestEdit:
             {"path": "a.py", "old_text": "1\n2\n3", "new_text": "x"}
         )
         assert text == "edit a.py (-3 +1 lines)"
+
+    @pytest.mark.parametrize(
+        ("args", "message"),
+        [
+            ({"old_text": "", "new_text": "x"}, "old_text must be a non-empty"),
+            ({"old_text": "a", "new_text": 1}, "new_text must be a string"),
+        ],
+    )
+    def test_validation(self, edit: Tool, args: dict, message: str) -> None:
+        with pytest.raises(ValueError, match=message):
+            edit.execute({"path": "README.md", **args})
 
 
 # --- patch ------------------------------------------------------------------
@@ -294,3 +309,7 @@ class TestDelete:
     def test_escape(self, delete: Tool) -> None:
         with pytest.raises(WorkspaceError):
             delete.execute({"path": "../x"})
+
+    def test_missing_path_arg(self, delete: Tool) -> None:
+        with pytest.raises(ValueError, match="path must be a non-empty"):
+            delete.execute({})

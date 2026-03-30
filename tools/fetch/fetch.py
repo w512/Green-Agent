@@ -63,7 +63,9 @@ class TextExtractor(HTMLParser):
         self._skip_depth = 0
         self._in_pre = 0
 
-    def handle_starttag(self, tag: str, attrs: list) -> None:
+    def handle_starttag(
+        self, tag: str, attrs: list[tuple[str, str | None]]
+    ) -> None:
         if tag in SKIP_TAGS:
             self._skip_depth += 1
         elif tag == "pre":
@@ -132,14 +134,14 @@ def fetch_url(url: str, max_chars: int) -> str:
     request = urllib.request.Request(url, headers=headers)
 
     with _open(request) as response:
-        final_url = assert_http_url(response.geturl() or url)
-        status = getattr(response, "status", None) or response.getcode()
-        content_type = response.headers.get_content_type()
-        charset = response.headers.get_content_charset() or "utf-8"
+        final_url = assert_http_url(str(response.geturl() or url))
+        status = int(getattr(response, "status", None) or response.getcode())
+        content_type = str(response.headers.get_content_type())
+        charset = str(response.headers.get_content_charset() or "utf-8")
         if not is_text_type(content_type):
             raise ValueError(f"Unsupported content type: {content_type}")
         try:
-            raw = response.read(MAX_BODY_BYTES)
+            raw = bytes(response.read(MAX_BODY_BYTES))
         except TimeoutError as error:
             raise ValueError(TIMEOUT_MESSAGE) from error
 

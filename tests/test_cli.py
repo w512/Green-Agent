@@ -16,9 +16,11 @@ from cli import (
     Palette,
     compact_args,
     console_ask,
+    pending_input,
     preview,
     read_task,
     render_event,
+    setup_readline,
 )
 
 PLAIN = Palette(enabled=False)
@@ -221,6 +223,44 @@ class TestReadTask:
         assert "cancelled" in capsys.readouterr().out
 
 
+class TestPendingInput:
+    def test_non_tty_is_never_pending(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+        assert pending_input() is False
+
+    def test_select_failure_is_not_pending(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+        def broken(*_a: Any, **_k: Any) -> None:
+            raise ValueError("bad fd")
+
+        monkeypatch.setattr("select.select", broken)
+        assert pending_input() is False
+
+    def test_ready_is_pending(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        monkeypatch.setattr("select.select", lambda *_a: ([1], [], []))
+        assert pending_input() is True
+
+
+class TestReadline:
+    def test_setup_registers_history(
+        self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pytest.importorskip("readline")
+        saved: list[Any] = []
+        monkeypatch.setattr("atexit.register", saved.append)
+        history = tmp_path / "nested" / "history"
+        assert setup_readline(history) is True
+        assert len(saved) == 1
+        saved[0]()  # the save hook creates the directory and the file
+        assert history.exists()
+
+
 class TestConsoleAsk:
     def test_without_tty_denies(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
@@ -228,6 +268,15 @@ class TestConsoleAsk:
         monkeypatch.setattr("sys.stdin.isatty", lambda: False)
         assert console_ask(PLAIN)("write x") is Decision.DENY
         assert "--yes" in capsys.readouterr().out
+
+    def test_eof_denies(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+        def eof(_prompt: str) -> str:
+            raise EOFError
+
+        monkeypatch.setattr("builtins.input", eof)
+        assert console_ask(PLAIN)("write x") is Decision.DENY
 
     def test_answers(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
@@ -283,24 +332,38 @@ class TestChat:
         assert lines[-1] == "\nAgent exceeded the maximum of 2 steps."
         assert chat.history is not None and len(chat.history) > 2
 
-    def test_provider_exception_is_reported(self) -> None:
+    @pytest.mark.parametrize(
+        ("exc", "expected"),
+        [
+            (RuntimeError("api down"), "\nRuntimeError: api down"),
+            (
+                KeyboardInterrupt(),
+                "\nInterrupted; the last completed turn is kept.",
+            ),
+        ],
+    )
+    def test_failures_are_reported(
+        self, exc: BaseException, expected: str
+    ) -> None:
         class Boom:
             model = "m"
 
             def respond(self, *_args: Any) -> Any:
-                raise RuntimeError("api down")
+                raise exc
 
+        lines: list[str] = []
         chat = Chat(
             provider=Boom(),
             registry={},
             permissions=AllowAll(),
             max_steps=3,
             palette=PLAIN,
-            out=(lines := []).append,
+            out=lines.append,
         )
+        chat.history = [{"role": "system", "content": "kept"}]
         assert chat.run_task("x") is False
-        assert lines[-1] == "\nRuntimeError: api down"
-        assert chat.history is None
+        assert lines[-1] == expected
+        assert chat.history == [{"role": "system", "content": "kept"}]
 
     def test_commands(self) -> None:
         chat, lines = make_chat([])
@@ -357,3 +420,89 @@ class TestStart:
         file.write_text("x")
         with pytest.raises(SystemExit, match="Not a directory"):
             start.resolve_root(str(file))
+
+    def test_ensure_config_copies_template_once(
+        self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        template = tmp_path / "config.template.py"
+        template.write_text("API_KEY = ''\n")
+        config = tmp_path / "config.py"
+        monkeypatch.setattr(start, "TEMPLATE_PATH", template)
+        monkeypatch.setattr(start, "CONFIG_PATH", config)
+        assert start.ensure_config() is True
+        assert config.read_text() == "API_KEY = ''\n"
+        config.write_text("edited")
+        assert start.ensure_config() is False
+        assert config.read_text() == "edited"
+
+    @pytest.fixture()
+    def wired(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
+        """main() with the provider factory replaced by a scripted fake."""
+        monkeypatch.setattr(start, "CONFIG_PATH", tmp_path / "config.py")
+        monkeypatch.setattr(start, "TEMPLATE_PATH", tmp_path / "template.py")
+        (tmp_path / "template.py").write_text("")
+        holder: dict[str, Any] = {}
+
+        def fake_create_provider(**_kwargs: Any) -> FakeProvider:
+            return holder["provider"]
+
+        import agent.llm
+
+        monkeypatch.setattr(agent.llm, "create_provider", fake_create_provider)
+        (tmp_path / "ws").mkdir()
+        (tmp_path / "ws" / "note.txt").write_text("hello\n")
+        holder["root"] = str(tmp_path / "ws")
+        return holder
+
+    def test_one_shot_success(
+        self, wired: dict[str, Any], capsys: pytest.CaptureFixture
+    ) -> None:
+        first = reply(None, [call("read", '{"path": "note.txt"}')])
+        wired["provider"] = FakeProvider([first, reply("it says hello")])
+        code = start.main(["-y", "-t", "what is in note.txt?", wired["root"]])
+        out = capsys.readouterr().out
+        assert code == 0
+        assert "-> read" in out and "it says hello" in out
+        assert "Workspace:" not in out  # no banner in one-shot mode
+
+    def test_one_shot_failure_exit_code(self, wired: dict[str, Any]) -> None:
+        looping = reply(None, [call("read", '{"path": "note.txt"}')])
+        wired["provider"] = FakeProvider([looping] * 3)
+        code = start.main(["-y", "--max-steps", "2", "-t", "x", wired["root"]])
+        assert code == 1
+
+    def test_model_override(
+        self, wired: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        wired["provider"] = FakeProvider([reply("ok")])
+        assert start.main(["--model", "other", "-t", "hi", wired["root"]]) == 0
+        assert wired["provider"].model == "other"
+
+    def test_interactive_banner_and_exit(
+        self,
+        wired: dict[str, Any],
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture,
+    ) -> None:
+        wired["provider"] = FakeProvider([])
+        monkeypatch.setattr("cli.setup_readline", lambda: False)
+        monkeypatch.setattr("cli.read_task", lambda _p: None)
+        assert start.main([wired["root"]]) == 0
+        out = capsys.readouterr().out
+        assert "Created config.py" in out  # first run copies the template
+        assert "Workspace:" in out and "Tools:" in out
+        assert "Not a git repository" in out
+
+    def test_missing_config_is_reported(
+        self, wired: dict[str, Any], capsys: pytest.CaptureFixture
+    ) -> None:
+        import agent.llm
+
+        def fail(**_kwargs: Any) -> None:
+            raise agent.llm.ConfigError("API_KEY is not set.")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(agent.llm, "create_provider", fail)
+            assert start.main(["-t", "hi", wired["root"]]) == 1
+        out = capsys.readouterr().out
+        assert "API_KEY is not set." in out

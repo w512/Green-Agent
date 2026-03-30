@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from types import SimpleNamespace
 from typing import Any
 
@@ -133,6 +134,10 @@ class TestCreateWithRetry:
         create_with_retry(client, {}, ["m1", "m2"], rec.log, rec.sleep)
         assert rec.logs == ["model busy (503); switching m1 -> m2"]
 
+    def test_no_models_raises(self) -> None:
+        with pytest.raises(RuntimeError, match="failed after retries"):
+            create_with_retry(FakeClient([]), {}, [], lambda _: None)
+
     def test_non_retryable_raises_immediately(self) -> None:
         client = FakeClient([status_error(401, "bad key"), "ok"])
         rec = Recorder()
@@ -222,6 +227,13 @@ class TestCreateProvider:
         del settings.FALLBACK_MODELS
         provider = create_provider(settings, client=FakeClient([]))
         assert provider.fallbacks == []
+
+    def test_default_settings_is_config_module(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setitem(sys.modules, "config", self.settings(MODEL="cfg"))
+        provider = create_provider(client=FakeClient([]))
+        assert provider.model == "cfg"
 
     def test_builds_real_client_with_retries_disabled(self) -> None:
         provider = create_provider(self.settings())

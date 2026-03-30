@@ -56,9 +56,6 @@ class Palette:
     def paint(self, code: str, text: str) -> str:
         return f"\033[{code}m{text}\033[0m" if self.enabled else text
 
-    def bold(self, text: str) -> str:
-        return self.paint("1", text)
-
     def dim(self, text: str) -> str:
         return self.paint("2", text)
 
@@ -114,7 +111,7 @@ def render_event(event: dict[str, Any], palette: Palette) -> str:
         step = f"step {event['step']}/{event['max_steps']}"
         return palette.dim(f"[{step} · {event['model']}]")
     if kind == "assistant":
-        return event["text"]
+        return str(event["text"])
     if kind == "tool":
         args = compact_args(event["args"], event["args_text"])
         return palette.tool(f"-> {event['name']} {args}")

@@ -101,7 +101,7 @@ class Workspace:
         return self._resolve(relative_path, must_exist=False)
 
     def resolve_existing_path(
-        self, relative_path: str | None = None
+        self, relative_path: object = None
     ) -> ResolvedPath:
         """Resolve an existing file or directory; defaults to the root."""
         target = relative_path if relative_path else "."

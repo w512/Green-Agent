@@ -89,6 +89,27 @@ class TestCommandRunner:
         result = run_command("printf '\\xff\\xfe ok'", tmp_path)
         assert result.endswith("ok")
 
+    def test_interrupt_kills_child(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import subprocess
+
+        started: list[subprocess.Popen[bytes]] = []
+        real_popen = subprocess.Popen
+
+        class InterruptingPopen(real_popen):  # type: ignore[type-arg,misc]
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                super().__init__(*args, **kwargs)
+                started.append(self)
+
+            def communicate(self, *args: Any, **kwargs: Any) -> Any:
+                raise KeyboardInterrupt
+
+        monkeypatch.setattr("agent.command.subprocess.Popen", InterruptingPopen)
+        with pytest.raises(KeyboardInterrupt):
+            run_command("sleep 30", tmp_path)
+        assert started and started[0].returncode is not None
+
 
 # --- bash -------------------------------------------------------------------
 
@@ -208,6 +229,15 @@ class TestCheckProject:
         (project / "Makefile").write_text("build:\n\ttrue\n")
         assert check.describe({}) == "check: (none)"
 
+    def test_malformed_configs_are_ignored(
+        self, check: Tool, project: Path
+    ) -> None:
+        (project / "pyproject.toml").write_text("not = [valid\n")
+        (project / "package.json").write_text("{nope")
+        assert check.describe({}) == "check: (none)"
+        (project / "package.json").write_text('{"scripts": {"test": "x"}}')
+        assert check.describe({}) == "check: (none)"
+
 
 # --- fetch ------------------------------------------------------------------
 
@@ -305,10 +335,48 @@ class TestFetch:
         error = urllib.error.HTTPError(
             "https://e.test/x", 404, "Not Found", headers, io.BytesIO(b"gone")
         )
-        self.serve(monkeypatch, error)
+
+        def raise_http_error(*_a: Any, **_k: Any) -> None:
+            raise error
+
+        monkeypatch.setattr("urllib.request.urlopen", raise_http_error)
         result = fetch.execute({"url": "https://e.test/x"})
         assert result.startswith("status: 404\n")
         assert result.endswith("\n\ngone")
+
+    def test_table_cells_and_unknown_charset(
+        self, fetch: Tool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        html = b"<table><tr><td>a</td><td>b</td></tr></table>"
+        self.serve(
+            monkeypatch,
+            FakeResponse(html, content_type="text/html; charset=bogus-x"),
+        )
+        result = fetch.execute({"url": "https://e.test/"})
+        assert result.endswith("a b")
+
+    def test_read_timeout(
+        self, fetch: Tool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        response = FakeResponse(b"", content_type="text/plain")
+
+        def slow_read(_size: int = -1) -> bytes:
+            raise TimeoutError
+
+        response.read = slow_read  # type: ignore[method-assign]
+        self.serve(monkeypatch, response)
+        with pytest.raises(ValueError, match="15 second timeout"):
+            fetch.execute({"url": "https://e.test/"})
+
+    def test_url_error_wrapping_timeout(
+        self, fetch: Tool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def fail(*_a: Any, **_k: Any) -> None:
+            raise urllib.error.URLError(TimeoutError())
+
+        monkeypatch.setattr("urllib.request.urlopen", fail)
+        with pytest.raises(ValueError, match="15 second timeout"):
+            fetch.execute({"url": "https://e.test/"})
 
     def test_binary_content_type(
         self, fetch: Tool, monkeypatch: pytest.MonkeyPatch
