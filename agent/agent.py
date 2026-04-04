@@ -215,8 +215,14 @@ def run_agent(
     instructions: str = INSTRUCTIONS,
     on_event: OnEvent | None = None,
     prior_messages: Sequence[Message] | None = None,
+    stop: Callable[[], bool] | None = None,
 ) -> AgentResult:
-    """Run the tool loop until the model answers without tool calls."""
+    """Run the tool loop until the model answers without tool calls.
+
+    `stop` is polled before each step; when it returns True the loop ends
+    with AgentError("Stopped by user.") and a history that is consistent
+    (every tool call so far has its result), so the chat can continue.
+    """
 
     def emit(kind: str, data: dict[str, Any]) -> None:
         if on_event is not None:
@@ -227,6 +233,8 @@ def run_agent(
     tools = definitions(registry)
 
     for step in range(1, max_steps + 1):
+        if stop is not None and stop():
+            raise AgentError("Stopped by user.", messages)
         model = provider.model
         emit("step", {"step": step, "max_steps": max_steps, "model": model})
 

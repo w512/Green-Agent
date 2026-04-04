@@ -369,6 +369,16 @@ class TestRunAgent:
             "tool",
         ]
 
+    def test_stop_between_steps_keeps_consistent_history(self) -> None:
+        call = tool_call("c1", "echo", {})
+        provider = FakeProvider([reply(FakeMessage(None, [call]))] * 3)
+        polls = iter([False, True])  # let step 1 run, stop before step 2
+        with pytest.raises(AgentError, match="Stopped by user") as info:
+            run(provider, stop=lambda: next(polls))
+        roles = [m["role"] for m in info.value.messages]
+        assert roles == ["system", "user", "assistant", "tool"]
+        assert len(provider.calls) == 1
+
     def test_no_message_in_response(self) -> None:
         provider = FakeProvider([reply(None)])
         with pytest.raises(AgentError, match="no message"):

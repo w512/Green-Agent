@@ -67,7 +67,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--model", metavar="NAME", help="override MODEL from config.py"
     )
+    parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="full-screen interface: project tree, file viewer, chat "
+        "(needs the tui extra: uv sync --extra tui)",
+    )
     args = parser.parse_args(argv)
+    if args.tui and args.task is not None:
+        parser.error("--tui and --task cannot be combined")
     if args.max_steps < 1:
         parser.error("--max-steps must be at least 1")
     return args
@@ -107,6 +115,21 @@ def main(argv: list[str] | None = None) -> int:
 
     workspace = Workspace(resolve_root(args.root))
     registry = load_tools(Environment(workspace))
+
+    if args.tui:
+        try:
+            from tui import run_tui
+        except ImportError:
+            print(palette.error("The TUI needs Textual: uv sync --extra tui"))
+            return 1
+        return run_tui(
+            provider=provider,
+            registry=registry,
+            workspace=workspace,
+            auto_approve=args.yes,
+            max_steps=args.max_steps,
+        )
+
     permissions = Permissions(
         workspace, auto_approve=args.yes, ask=console_ask(palette)
     )

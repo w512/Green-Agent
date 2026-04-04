@@ -14,6 +14,8 @@ Ollama (cloud or local), or a self-hosted server.
   git can undo them; destructive commands always ask.
 - Never leaves the project directory with file operations — symlinks included.
 - Multi-turn chat with history, or one-shot mode for scripts and CI.
+- Optional full-screen mode with a project tree and a file viewer that
+  follows the agent's edits.
 - Model fallback: if the primary model is busy, it retries and switches to the
   next one you configured.
 - Single dependency (`openai`), no accounts or telemetry beyond your model
@@ -26,6 +28,7 @@ Python 3.11 or newer.
 ```bash
 git clone https://github.com/w512/green-agent.git && cd green-agent
 uv sync                 # or: pip install openai
+uv sync --extra tui     # optional: full-screen mode (adds Textual)
 python start.py         # first run creates config.py and asks you to fill it in
 ```
 
@@ -44,7 +47,7 @@ Typical `BASE_URL` values:
 BASE_URL = "https://api.openai.com/v1"
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 BASE_URL = "https://ollama.com/v1"
-BASE_URL = "http://localhost:11434/v1"      # local Ollama
+BASE_URL = "http://localhost:11434/v1"  # local Ollama
 ```
 
 The model must support tool calling (function calling); most current models
@@ -93,6 +96,29 @@ running task. Input history is kept in `~/.pyagent_history`.
 
 One-shot mode (`-t`) prints the same output and exits with code 0 on success
 and 1 when the task failed or ran out of steps.
+
+### Full-screen mode
+
+```bash
+python start.py --tui [project-dir]
+```
+
+Three panes: the project tree on the left (Enter or click opens a file), a
+syntax-highlighted file viewer that reloads when the agent edits the open
+file, and the chat with the agent's replies rendered as Markdown. Approvals
+appear as a dialog: `y` allow once, `a` allow for the session, `n`/Esc deny.
+
+| Key | Action |
+|-----|--------|
+| Enter | Send the task (Ctrl+J inserts a newline) |
+| Esc | Stop the running task after the current step |
+| Ctrl+N | New conversation |
+| Ctrl+B / Ctrl+O | Show or hide the tree / the viewer |
+| F1 | Help |
+| Ctrl+Q | Quit |
+
+Requires the `tui` extra (`uv sync --extra tui`); everything else works
+without it.
 
 ## What the agent can do
 
@@ -186,6 +212,7 @@ retention and training policies before using the agent on private code.
 ```text
 start.py             entry point: config, arguments, wiring
 cli.py               console frontend
+tui.py               full-screen frontend (Textual, optional)
 agent/agent.py       model/tool loop
 agent/llm.py         Chat Completions client: retries, model fallback
 agent/tools.py       tool registry

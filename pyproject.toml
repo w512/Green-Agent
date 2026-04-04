@@ -6,8 +6,18 @@ license = "MIT"
 requires-python = ">=3.11"
 dependencies = ["openai>=1.50"]
 
+[project.optional-dependencies]
+tui = [
+    "textual>=1.0",
+]
+
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10"]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "textual>=1.0",
+]
 
 [tool.uv]
 package = false
@@ -28,6 +38,6 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
 python_version = "3.11"
-files = ["agent", "tools", "cli.py", "start.py"]
+files = ["agent", "tools", "cli.py", "start.py", "tui.py"]
 strict = true
 ignore_missing_imports = true
