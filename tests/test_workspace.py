@@ -67,8 +67,17 @@ class TestResolveExistingFile:
         assert resolved == ws.root / "sub" / "nested.txt"
 
     def test_missing_file(self, ws: Workspace) -> None:
-        with pytest.raises(OSError):
+        with pytest.raises(WorkspaceError, match="Not found: missing.txt"):
             ws.resolve_existing_file("missing.txt")
+
+    def test_missing_file_hides_absolute_path(self, ws: Workspace) -> None:
+        with pytest.raises(WorkspaceError) as info:
+            ws.resolve_existing_file("sub/missing.txt")
+        assert str(ws.root) not in str(info.value)
+
+    def test_file_used_as_directory(self, ws: Workspace) -> None:
+        with pytest.raises(WorkspaceError, match="Not found: file.txt/x"):
+            ws.resolve_existing_file("file.txt/x")
 
     @pytest.mark.parametrize("bad", ["", None, 42, ["file.txt"]])
     def test_non_string_or_empty(self, ws: Workspace, bad: object) -> None:

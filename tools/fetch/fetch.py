@@ -15,10 +15,11 @@ if TYPE_CHECKING:
     from agent.tools import Environment
 
 DEFAULT_MAX = 30_000
-HARD_MAX = 60_000
+# Below the agent's MAX_RESULT_CHARS, so the harness never truncates again.
+HARD_MAX = 50_000
 TIMEOUT_SECONDS = 15.0
 MAX_BODY_BYTES = 2 * 1024 * 1024
-USER_AGENT = "pyagent/0.1 (+https://github.com/; coding agent)"
+USER_AGENT = "pyagent/0.1 (+https://github.com/w512/green-agent)"
 ACCEPT = "text/html, text/plain, application/json;q=0.9, */*;q=0.5"
 
 TEXT_TYPES = (

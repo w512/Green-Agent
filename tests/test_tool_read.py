@@ -69,7 +69,7 @@ def test_binary_file(read: Tool) -> None:
 
 
 def test_missing_file(read: Tool) -> None:
-    with pytest.raises(OSError):
+    with pytest.raises(WorkspaceError, match="Not found: nope.txt"):
         read.execute({"path": "nope.txt"})
 
 

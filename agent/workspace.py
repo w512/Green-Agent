@@ -77,7 +77,12 @@ class Workspace:
             raise WorkspaceError(f"Path escapes workspace: {relative_path}")
 
         if must_exist:
-            real_target = Path(os.path.realpath(lexical_target, strict=True))
+            try:
+                real_target = Path(
+                    os.path.realpath(lexical_target, strict=True)
+                )
+            except (FileNotFoundError, NotADirectoryError):
+                raise WorkspaceError(f"Not found: {relative_path}") from None
             if not is_inside(self.real_root, real_target):
                 raise WorkspaceError(
                     f"Path resolves outside workspace: {relative_path}"

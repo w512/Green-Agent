@@ -327,6 +327,19 @@ class TestFetch:
         result = fetch.execute({"url": "https://e.test/", "max_chars": 10})
         assert result.endswith("x" * 10 + "\n...[body truncated at 10 chars]")
 
+    def test_hard_cap_fits_agent_result_limit(
+        self, fetch: Tool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The harness must not truncate a second time and hide fetch's note."""
+        from agent.agent import render_tool_result
+
+        body = b"x" * 200_000
+        self.serve(monkeypatch, FakeResponse(body, content_type="text/plain"))
+        result = fetch.execute({"url": "https://e.test/", "max_chars": 10**9})
+        assert result.endswith(" chars]")
+        assert "body truncated" in result
+        assert render_tool_result(result) == result
+
     def test_http_error_body_is_returned(
         self, fetch: Tool, monkeypatch: pytest.MonkeyPatch
     ) -> None:

@@ -183,7 +183,7 @@ class TestEdit:
             )
 
     def test_missing_file(self, edit: Tool) -> None:
-        with pytest.raises(OSError):
+        with pytest.raises(WorkspaceError, match="Not found: nope.txt"):
             edit.execute({"path": "nope.txt", "old_text": "a", "new_text": "b"})
 
     def test_binary_file(self, edit: Tool) -> None:
@@ -303,7 +303,7 @@ class TestDelete:
         assert (project / "README.md").exists()
 
     def test_missing(self, delete: Tool) -> None:
-        with pytest.raises(OSError):
+        with pytest.raises(WorkspaceError, match="Not found: nope.txt"):
             delete.execute({"path": "nope.txt"})
 
     def test_escape(self, delete: Tool) -> None:

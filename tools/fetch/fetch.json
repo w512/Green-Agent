@@ -12,7 +12,7 @@
         },
         "max_chars": {
           "type": "integer",
-          "description": "Max body characters to return. Default 30000, hard cap 60000."
+          "description": "Max body characters to return. Default 30000, hard cap 50000."
         }
       },
       "required": ["url"]
