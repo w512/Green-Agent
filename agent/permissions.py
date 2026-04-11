@@ -24,7 +24,6 @@ import enum
 import os
 import re
 import shlex
-import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
@@ -279,32 +278,23 @@ def parse_answer(answer: str) -> Decision:
     return Decision.DENY
 
 
-def console_ask(description: str) -> Decision:
-    """Plain-terminal prompt; denies when there is no interactive stdin."""
-    if not sys.stdin.isatty():
-        print("No terminal to confirm; denying. Use --yes to auto-approve.")
-        return Decision.DENY
-    try:
-        return parse_answer(input(f"\nApprove: {description}? [y/N/a] "))
-    except EOFError:
-        return Decision.DENY
-
-
 # --- policy ------------------------------------------------------------------
 
 
 class Permissions:
+    """`ask` is the frontend's prompt: description -> Decision."""
+
     def __init__(
         self,
         workspace: Workspace,
+        ask: Ask,
         *,
         auto_approve: bool = False,
-        ask: Ask | None = None,
         trust_root: Path | None | str = "auto",
     ) -> None:
         self.workspace = workspace
         self.auto_approve = auto_approve
-        self._ask: Ask = ask or console_ask
+        self._ask = ask
         if trust_root == "auto":
             trust_root = workspace.root if workspace.git_root else None
         self.trust_root: Path | None = (

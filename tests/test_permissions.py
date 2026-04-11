@@ -12,7 +12,6 @@ from agent.permissions import (
     Decision,
     Permissions,
     command_stays_inside,
-    console_ask,
     dangerous_command,
     looks_like_path,
     parse_answer,
@@ -274,31 +273,6 @@ class TestAnswers:
     @pytest.mark.parametrize("text", ["", "n", "no", "maybe", "yep"])
     def test_deny(self, text: str) -> None:
         assert parse_answer(text) is Decision.DENY
-
-    def test_console_ask_without_tty_denies(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
-    ) -> None:
-        monkeypatch.setattr("sys.stdin.isatty", lambda: False)
-        assert console_ask("write x") is Decision.DENY
-        assert "denying" in capsys.readouterr().out
-
-    def test_console_ask_reads_answer(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
-        monkeypatch.setattr("builtins.input", lambda _prompt: "y")
-        assert console_ask("write x") is Decision.ALLOW
-
-    def test_console_ask_eof_denies(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
-
-        def raise_eof(_prompt: str) -> str:
-            raise EOFError
-
-        monkeypatch.setattr("builtins.input", raise_eof)
-        assert console_ask("write x") is Decision.DENY
 
 
 # --- policy -----------------------------------------------------------------

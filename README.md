@@ -214,6 +214,7 @@ start.py             entry point: config, arguments, wiring
 cli.py               console frontend
 tui.py               full-screen frontend (Textual, optional)
 agent/agent.py       model/tool loop
+agent/session.py     conversation history, per-task outcome (shared by UIs)
 agent/llm.py         Chat Completions client: retries, model fallback
 agent/tools.py       tool registry
 agent/permissions.py approval policy

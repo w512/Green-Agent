@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path
 
 GIT_TIMEOUT_SECONDS = 5.0
@@ -40,23 +39,3 @@ def is_tracked(repo: Path, file_path: Path) -> bool:
     except (OSError, subprocess.SubprocessError):
         return False
     return True
-
-
-@dataclass(frozen=True)
-class GitInfo:
-    name: str
-    branch: str
-    hash: str
-    dirty: bool
-
-
-def load_git_info(cwd: Path) -> GitInfo:
-    name = cwd.name
-    try:
-        branch = _git(["rev-parse", "--abbrev-ref", "HEAD"], cwd)
-        commit = _git(["rev-parse", "--short", "HEAD"], cwd)
-        status = _git(["status", "--porcelain"], cwd)
-    except (OSError, subprocess.SubprocessError):
-        # not a git repo, or git is unavailable
-        return GitInfo(name=name, branch="", hash="", dirty=False)
-    return GitInfo(name=name, branch=branch, hash=commit, dirty=bool(status))

@@ -55,7 +55,6 @@ class WriteTool:
 
         file_path = self.workspace.resolve_writable_file(relative)
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path = self.workspace.resolve_writable_file(relative)
 
         existed = False
         try:

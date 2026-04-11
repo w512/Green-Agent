@@ -28,6 +28,7 @@ check = "ruff check . && ruff format --check . && mypy && pytest -q"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.ruff]
 target-version = "py311"

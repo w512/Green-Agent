@@ -8,22 +8,17 @@ from __future__ import annotations
 
 import atexit
 import contextlib
-import json
 import os
 import select
 import sys
-import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from agent.agent import AgentError, run_agent
 from agent.permissions import Decision, parse_answer
+from agent.render import compact_args, preview
+from agent.session import Session
 
-PREVIEW_LINES = 8
-PREVIEW_CHARS = 600
-ARG_VALUE_CHARS = 60
-ARGS_CHARS = 200
 PASTE_WINDOW_SECONDS = 0.05
 HISTORY_FILE = Path.home() / ".pyagent_history"
 HISTORY_LENGTH = 1000
@@ -76,33 +71,6 @@ class Palette:
 
 
 # --- rendering --------------------------------------------------------------
-
-
-def _shorten(text: str, limit: int) -> str:
-    return text if len(text) <= limit else text[: limit - 3] + "..."
-
-
-def compact_args(args: object, args_text: object = None) -> str:
-    """One-line view of tool arguments with long values trimmed."""
-    if not isinstance(args, dict):
-        return _shorten(str(args_text or ""), ARGS_CHARS)
-    trimmed = {
-        key: _shorten(value, ARG_VALUE_CHARS)
-        if isinstance(value, str)
-        else value
-        for key, value in args.items()
-    }
-    text = json.dumps(trimmed, ensure_ascii=False)
-    return _shorten(text, ARGS_CHARS)
-
-
-def preview(text: str) -> str:
-    lines = text.splitlines() or [""]
-    shown = lines[:PREVIEW_LINES]
-    body = "\n".join(shown)[:PREVIEW_CHARS]
-    if len(lines) > len(shown) or len(body) < len(text):
-        body += f"\n... ({len(lines)} lines total)"
-    return body
 
 
 def render_event(event: dict[str, Any], palette: Palette) -> str:
@@ -204,66 +172,30 @@ def console_ask(palette: Palette) -> Callable[[str], Decision]:
 class Chat:
     def __init__(
         self,
+        session: Session,
         *,
-        provider: Any,
-        registry: dict[str, Any],
-        permissions: Any,
-        max_steps: int,
         palette: Palette | None = None,
         out: Callable[[str], None] = print,
     ) -> None:
-        self.provider = provider
-        self.registry = registry
-        self.permissions = permissions
-        self.max_steps = max_steps
+        self.session = session
         self.palette = palette or Palette()
         self.out = out
-        self.history: list[dict[str, Any]] | None = None
-        self._steps = 0
-        self._tools = 0
 
     def _on_event(self, event: dict[str, Any]) -> None:
-        if event["type"] == "step":
-            self._steps += 1
-        elif event["type"] == "tool":
-            self._tools += 1
         self.out(render_event(event, self.palette))
-
-    def _summary(self, started: float) -> str:
-        elapsed = time.monotonic() - started
-        steps = f"{self._steps} step{'s' if self._steps != 1 else ''}"
-        tools = f"{self._tools} tool call{'s' if self._tools != 1 else ''}"
-        return self.palette.dim(f"[{steps} · {tools} · {elapsed:.1f}s]")
 
     def run_task(self, task: str) -> bool:
         """Run one task; True on a normal completion."""
-        self._steps = self._tools = 0
-        started = time.monotonic()
         try:
-            result = run_agent(
-                task,
-                provider=self.provider,
-                registry=self.registry,
-                permissions=self.permissions,
-                max_steps=self.max_steps,
-                on_event=self._on_event,
-                prior_messages=self.history,
-            )
-        except AgentError as failure:
-            self.history = failure.messages
-            self.out(self.palette.error(f"\n{failure}"))
-            return False
+            outcome = self.session.run(task, on_event=self._on_event)
         except KeyboardInterrupt:
             notice = "\nInterrupted; the last completed turn is kept."
             self.out(self.palette.warn(notice))
             return False
-        except Exception as failure:  # noqa: BLE001 - keep the chat alive
-            self.out(
-                self.palette.error(f"\n{type(failure).__name__}: {failure}")
-            )
+        if outcome.error is not None:
+            self.out(self.palette.error(f"\n{outcome.error}"))
             return False
-        self.history = result.messages
-        self.out(self._summary(started))
+        self.out(self.palette.dim(outcome.summary()))
         return True
 
     def handle_command(self, line: str) -> bool:
@@ -275,14 +207,14 @@ class Chat:
         if command == "/help":
             self.out(HELP)
         elif command == "/new":
-            self.history = None
+            self.session.reset()
             self.out(self.palette.dim("New conversation."))
         elif command == "/model":
             if argument:
-                self.provider.model = argument
-            self.out(f"Model: {self.provider.model}")
+                self.session.provider.model = argument
+            self.out(f"Model: {self.session.provider.model}")
         elif command == "/tools":
-            self.out(", ".join(self.registry) or "(none)")
+            self.out(", ".join(self.session.registry) or "(none)")
         else:
             self.out(self.palette.error(f"Unknown command: {command}"))
             self.out(self.palette.dim("Type /help for the list of commands."))

@@ -8,20 +8,20 @@ from typing import Any
 import pytest
 
 import start
-from agent.agent import AllowAll
 from agent.permissions import Decision
+from agent.render import compact_args, preview
+from agent.session import Session
 from agent.tools import Tool
 from cli import (
     Chat,
     Palette,
-    compact_args,
     console_ask,
     pending_input,
-    preview,
     read_task,
     render_event,
     setup_readline,
 )
+from tests.conftest import AllowAll
 
 PLAIN = Palette(enabled=False)
 COLOR = Palette(enabled=True)
@@ -71,16 +71,21 @@ class FakeProvider:
         return self.responses.pop(0)
 
 
-def make_chat(responses: list[Any], registry: dict[str, Tool] | None = None):
-    lines: list[str] = []
-    chat = Chat(
-        provider=FakeProvider(responses),
+def make_session(
+    provider: Any, registry: dict[str, Tool] | None = None
+) -> Session:
+    return Session(
+        provider=provider,
         registry=registry or {},
         permissions=AllowAll(),
         max_steps=5,
-        palette=PLAIN,
-        out=lines.append,
     )
+
+
+def make_chat(responses: list[Any], registry: dict[str, Tool] | None = None):
+    lines: list[str] = []
+    session = make_session(FakeProvider(responses), registry)
+    chat = Chat(session, palette=PLAIN, out=lines.append)
     return chat, lines
 
 
@@ -301,8 +306,8 @@ class TestChat:
         assert lines[0] == "[step 1/5 · fake]"
         assert lines[1] == "done"
         assert lines[2].startswith("[1 step · 0 tool calls · ")
-        assert chat.history is not None
-        assert [m["role"] for m in chat.history] == [
+        assert chat.session.history is not None
+        assert [m["role"] for m in chat.session.history] == [
             "system",
             "user",
             "assistant",
@@ -312,9 +317,11 @@ class TestChat:
         chat, _lines = make_chat([reply("one"), reply("two")])
         chat.run_task("a")
         chat.run_task("b")
-        assert chat.history is not None and len(chat.history) == 5
+        assert (
+            chat.session.history is not None and len(chat.session.history) == 5
+        )
         assert chat.handle_command("/new") is True
-        assert chat.history is None
+        assert chat.session.history is None
 
     def test_tool_call_counts(self, registry: dict[str, Tool]) -> None:
         first = reply(None, [call("read", '{"path": "README.md"}')])
@@ -327,10 +334,12 @@ class TestChat:
     def test_step_limit_keeps_history(self) -> None:
         looping = reply(None, [call("nope", "{}")])
         chat, lines = make_chat([looping] * 5)
-        chat.max_steps = 2
+        chat.session.max_steps = 2
         assert chat.run_task("go") is False
         assert lines[-1] == "\nAgent exceeded the maximum of 2 steps."
-        assert chat.history is not None and len(chat.history) > 2
+        assert (
+            chat.session.history is not None and len(chat.session.history) > 2
+        )
 
     @pytest.mark.parametrize(
         ("exc", "expected"),
@@ -352,22 +361,15 @@ class TestChat:
                 raise exc
 
         lines: list[str] = []
-        chat = Chat(
-            provider=Boom(),
-            registry={},
-            permissions=AllowAll(),
-            max_steps=3,
-            palette=PLAIN,
-            out=lines.append,
-        )
-        chat.history = [{"role": "system", "content": "kept"}]
+        chat = Chat(make_session(Boom()), palette=PLAIN, out=lines.append)
+        chat.session.history = [{"role": "system", "content": "kept"}]
         assert chat.run_task("x") is False
         assert lines[-1] == expected
-        assert chat.history == [{"role": "system", "content": "kept"}]
+        assert chat.session.history == [{"role": "system", "content": "kept"}]
 
     def test_commands(self) -> None:
         chat, lines = make_chat([])
-        chat.registry = {"read": None, "grep": None}
+        chat.session.registry = {"read": None, "grep": None}
         assert chat.handle_command("plain text") is False
         assert chat.handle_command("/help") is True
         assert lines[-1].startswith("Commands:")
@@ -377,7 +379,7 @@ class TestChat:
         assert lines[-1] == "Model: fake"
         chat.handle_command("/model other")
         assert lines[-1] == "Model: other"
-        assert chat.provider.model == "other"
+        assert chat.session.provider.model == "other"
         chat.handle_command("/bogus")
         assert lines[-2] == "Unknown command: /bogus"
 

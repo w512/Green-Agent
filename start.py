@@ -8,11 +8,11 @@ import shutil
 import sys
 from pathlib import Path
 
+from agent.agent import DEFAULT_MAX_STEPS
+
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = BASE_DIR / "config.py"
 TEMPLATE_PATH = BASE_DIR / "config.template.py"
-
-DEFAULT_MAX_STEPS = 30
 
 EPILOG = """Set API_KEY, BASE_URL, and MODEL in config.py (created on first
 run). Any OpenAI-compatible Chat Completions provider works.
@@ -96,6 +96,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from agent.llm import ConfigError, create_provider
     from agent.permissions import Permissions
+    from agent.session import Session
     from agent.tools import Environment, load_tools
     from agent.workspace import Workspace
     from cli import Chat, Palette, console_ask, setup_readline
@@ -131,15 +132,15 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     permissions = Permissions(
-        workspace, auto_approve=args.yes, ask=console_ask(palette)
+        workspace, console_ask(palette), auto_approve=args.yes
     )
-    chat = Chat(
+    session = Session(
         provider=provider,
         registry=registry,
         permissions=permissions,
         max_steps=args.max_steps,
-        palette=palette,
     )
+    chat = Chat(session, palette=palette)
 
     if args.task is not None:
         return 0 if chat.run_task(args.task) else 1

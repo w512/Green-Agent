@@ -44,13 +44,6 @@ class Approver(Protocol):
     def approve(self, tool: Tool, args: Args) -> bool: ...
 
 
-class AllowAll:
-    """Approver that never asks. For tests and non-interactive runs."""
-
-    def approve(self, tool: Tool, args: Args) -> bool:
-        return True
-
-
 class AgentError(Exception):
     """The loop stopped abnormally; `messages` holds the history so far."""
 

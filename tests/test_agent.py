@@ -11,7 +11,6 @@ import pytest
 from agent.agent import (
     EMPTY_REPLY,
     AgentError,
-    AllowAll,
     error_text,
     initial_messages,
     message_text,
@@ -22,6 +21,7 @@ from agent.agent import (
     run_agent,
 )
 from agent.tools import Tool
+from tests.conftest import AllowAll
 
 # --- fakes ------------------------------------------------------------------
 

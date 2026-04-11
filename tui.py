@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import contextlib
 import threading
-import time
 from pathlib import Path
 from typing import Any
 
@@ -34,12 +33,13 @@ from textual.widgets import (
 )
 from textual.widgets.tree import TreeNode
 
-from agent.agent import AgentError, run_agent
+from agent.agent import DEFAULT_MAX_STEPS
 from agent.permissions import Decision, Permissions
+from agent.render import compact_args, preview
+from agent.session import Outcome, Session
 from agent.textfile import TextFileError, read_text_file
 from agent.walk import is_skipped_name
 from agent.workspace import Workspace
-from cli import compact_args, preview
 
 FILE_TOOLS = frozenset({"write", "edit", "patch", "delete"})
 MAX_VIEW_CHARS = 200_000
@@ -302,22 +302,22 @@ class AgentApp(App[int]):
         registry: dict[str, Any],
         workspace: Workspace,
         auto_approve: bool = False,
-        max_steps: int = 30,
+        max_steps: int = DEFAULT_MAX_STEPS,
     ) -> None:
         super().__init__()
-        self.provider = provider
-        self.registry = registry
         self.workspace = workspace
-        self.max_steps = max_steps
         self.permissions = Permissions(
-            workspace, auto_approve=auto_approve, ask=self.ask_approval
+            workspace, self.ask_approval, auto_approve=auto_approve
         )
-        self.history: list[dict[str, Any]] | None = None
+        self.session = Session(
+            provider=provider,
+            registry=registry,
+            permissions=self.permissions,
+            max_steps=max_steps,
+        )
         self.busy = False
         self._stop = threading.Event()
         self._pending_ask: threading.Event | None = None
-        self._steps = 0
-        self._tools = 0
 
     # -- layout --
 
@@ -338,7 +338,7 @@ class AgentApp(App[int]):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.sub_title = f"{self.workspace.root.name} · {self.provider.model}"
+        self._update_subtitle()
         chat = self.query_one(ChatLog)
         git = self.workspace.git_root
         mode = (
@@ -349,11 +349,15 @@ class AgentApp(App[int]):
             else "not a git repository: every write or command asks"
         )
         chat.add_note(f"Workspace: {self.workspace.root}")
-        chat.add_note(f"Tools: {', '.join(self.registry)}")
+        chat.add_note(f"Tools: {', '.join(self.session.registry)}")
         chat.add_note(f"Approvals: {mode}. F1 for help.")
         self.query_one(TaskInput).focus()
 
     # -- helpers --
+
+    def _update_subtitle(self) -> None:
+        model = self.session.provider.model
+        self.sub_title = f"{self.workspace.root.name} · {model}"
 
     def _set_status(self, text: str) -> None:
         self.query_one("#status", Label).update(text)
@@ -364,7 +368,7 @@ class AgentApp(App[int]):
         if node is not None:
             tree.reload_node(node)
 
-    def _after_file_change(self, tool: str, args: dict[str, Any]) -> None:
+    def _after_file_change(self, args: dict[str, Any]) -> None:
         relative = args.get("path")
         if not isinstance(relative, str):
             return
@@ -383,14 +387,11 @@ class AgentApp(App[int]):
     def _handle_event(self, event: dict[str, Any]) -> None:
         kind = event["type"]
         if kind == "step":
-            self._steps += 1
             step = f"step {event['step']}/{event['max_steps']}"
             self._set_status(
                 f"{step} · {event['model']} · working… (Esc stops)"
             )
             return
-        if kind == "tool":
-            self._tools += 1
         self.query_one(ChatLog).add_event(event)
         changed_file = (
             kind == "result"
@@ -399,7 +400,7 @@ class AgentApp(App[int]):
             and isinstance(event["args"], dict)
         )
         if changed_file:
-            self._after_file_change(event["name"], event["args"])
+            self._after_file_change(event["args"])
 
     def ask_approval(self, description: str) -> Decision:
         """Permissions callback; runs in the worker thread and blocks."""
@@ -436,53 +437,27 @@ class AgentApp(App[int]):
             return
         self.busy = True
         self._stop.clear()
-        self._steps = self._tools = 0
         self.query_one(ChatLog).add_user(task)
         self._set_status("working…")
         self._run_task(task)
 
     @work(thread=True, exclusive=True, group="agent")
     def _run_task(self, task: str) -> None:
-        started = time.monotonic()
-        try:
-            result = run_agent(
-                task,
-                provider=self.provider,
-                registry=self.registry,
-                permissions=self.permissions,
-                max_steps=self.max_steps,
-                on_event=self._event_from_thread,
-                prior_messages=self.history,
-                stop=self._stop.is_set,
-            )
-        except AgentError as failure:
-            self.history = failure.messages
-            self._finish_from_thread(str(failure), started)
-            return
-        except Exception as failure:  # noqa: BLE001 - keep the app alive
-            self._finish_from_thread(
-                f"{type(failure).__name__}: {failure}", started
-            )
-            return
-        self.history = result.messages
-        self._finish_from_thread(None, started)
+        outcome = self.session.run(
+            task, on_event=self._event_from_thread, stop=self._stop.is_set
+        )
+        with contextlib.suppress(RuntimeError):  # app is shutting down
+            self.call_from_thread(self._task_finished, outcome)
 
-    def _finish_from_thread(self, error: str | None, started: float) -> None:
-        with contextlib.suppress(RuntimeError):
-            self.call_from_thread(self._task_finished, error, started)
-
-    def _task_finished(self, error: str | None, started: float) -> None:
+    def _task_finished(self, outcome: Outcome) -> None:
         self.busy = False
         self._stop.clear()
         chat = self.query_one(ChatLog)
-        if error:
-            chat.add_note(error, "error")
-        elapsed = time.monotonic() - started
-        steps = f"{self._steps} step{'s' if self._steps != 1 else ''}"
-        tools = f"{self._tools} tool call{'s' if self._tools != 1 else ''}"
-        chat.add_note(f"[{steps} · {tools} · {elapsed:.1f}s]")
+        if outcome.error is not None:
+            chat.add_note(outcome.error, "error")
+        chat.add_note(outcome.summary())
         self._set_status("Ready")
-        self.sub_title = f"{self.workspace.root.name} · {self.provider.model}"
+        self._update_subtitle()
         self.query_one(TaskInput).focus()
 
     # -- actions --
@@ -497,7 +472,7 @@ class AgentApp(App[int]):
         if self.busy:
             self.notify("Stop the running task first.", severity="warning")
             return
-        self.history = None
+        self.session.reset()
         self.query_one(ChatLog).add_note("New conversation.")
 
     def action_toggle_tree(self) -> None:
@@ -530,7 +505,7 @@ def run_tui(
     registry: dict[str, Any],
     workspace: Workspace,
     auto_approve: bool = False,
-    max_steps: int = 30,
+    max_steps: int = DEFAULT_MAX_STEPS,
 ) -> int:
     app = AgentApp(
         provider=provider,

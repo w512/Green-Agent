@@ -273,20 +273,25 @@ class TestRunningTasks:
             assert "ok" in texts
             assert any(t.startswith("[2 steps · 1 tool call") for t in texts)
             assert "VALUE = 7" in viewer_code(app)
-            assert app.history is not None and len(app.history) == 5
+            assert (
+                app.session.history is not None
+                and len(app.session.history) == 5
+            )
 
     async def test_error_and_history_kept(
         self, ws: Workspace, registry: dict[str, Tool]
     ) -> None:
         looping = reply(None, [call("read", '{"path": "README.md"}')])
         app = make_app(ws, registry, [looping] * 6)
-        app.max_steps = 2
+        app.session.max_steps = 2
         async with app.run_test():
             app.submit_task("loop")
             await wait_idle(app)
             texts = chat_texts(app)
             assert "Agent exceeded the maximum of 2 steps." in texts
-            assert app.history is not None and len(app.history) > 2
+            assert (
+                app.session.history is not None and len(app.session.history) > 2
+            )
 
     async def test_busy_rejects_second_task_and_stop(
         self, ws: Workspace, registry: dict[str, Tool]
@@ -315,9 +320,9 @@ class TestRunningTasks:
         async with app.run_test() as pilot:
             app.submit_task("a")
             await wait_idle(app)
-            assert app.history is not None
+            assert app.session.history is not None
             await pilot.press("ctrl+n")
-            assert app.history is None
+            assert app.session.history is None
             assert "New conversation." in chat_texts(app)
 
 

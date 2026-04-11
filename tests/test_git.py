@@ -1,4 +1,4 @@
-"""Tests for git root discovery."""
+"""Tests for git root discovery and tracked-file lookup."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from agent.git import find_git_root, load_git_info
+from agent.git import find_git_root, is_tracked
 
 git_available = shutil.which("git") is not None
 needs_git = pytest.mark.skipif(git_available is False, reason="git missing")
@@ -29,22 +29,18 @@ def test_repo_root(tmp_path: Path) -> None:
 
 
 @needs_git
-def test_git_info_inside_repo(tmp_path: Path) -> None:
-    git = ["git", "-c", "user.email=t@t", "-c", "user.name=t"]
-    subprocess.run([*git, "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
+def test_is_tracked(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    tracked = tmp_path / "a.txt"
+    tracked.write_text("a")
+    subprocess.run(["git", "add", "a.txt"], cwd=tmp_path, check=True)
+    untracked = tmp_path / "b.txt"
+    untracked.write_text("b")
+    assert is_tracked(tmp_path, tracked)
+    assert not is_tracked(tmp_path, untracked)
+    assert not is_tracked(tmp_path, tmp_path / "missing.txt")
+
+
+def test_is_tracked_outside_repo(tmp_path: Path) -> None:
     (tmp_path / "a.txt").write_text("a")
-    subprocess.run([*git, "add", "."], cwd=tmp_path, check=True)
-    subprocess.run([*git, "commit", "-q", "-m", "c"], cwd=tmp_path, check=True)
-    info = load_git_info(tmp_path)
-    assert info.branch == "main"
-    assert len(info.hash) >= 7
-    assert info.dirty is False
-    (tmp_path / "b.txt").write_text("b")
-    assert load_git_info(tmp_path).dirty is True
-
-
-def test_git_info_outside_repo(tmp_path: Path) -> None:
-    info = load_git_info(tmp_path)
-    assert info.name == tmp_path.name
-    assert info.branch == ""
-    assert info.dirty is False
+    assert not is_tracked(tmp_path, tmp_path / "a.txt")

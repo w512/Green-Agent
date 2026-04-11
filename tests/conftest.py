@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from agent.tools import Environment, Tool, load_tools
 from agent.workspace import Workspace
+
+
+class AllowAll:
+    """Approver that never asks."""
+
+    def approve(self, tool: Tool, args: dict[str, Any]) -> bool:
+        return True
 
 
 def write(path: Path, content: str | bytes) -> None:
