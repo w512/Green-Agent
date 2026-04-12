@@ -1,5 +1,5 @@
 [project]
-name = "pyagent"
+name = "green-agent"
 version = "0.1.0"
 description = "Small, modular coding-agent harness for Python"
 license = "MIT"
@@ -23,7 +23,7 @@ dev = [
 package = false
 
 # Used by the agent's own `check` tool when it works on this repository.
-[tool.pyagent]
+[tool.green-agent]
 check = "ruff check . && ruff format --check . && mypy && pytest -q"
 
 [tool.pytest.ini_options]

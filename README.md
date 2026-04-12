@@ -92,7 +92,7 @@ Chat commands: `/new` starts a fresh conversation, `/model [name]` shows or
 switches the model, `/tools` lists tools, `/help` shows everything. A trailing
 backslash continues a task on the next line; pasted multi-line text stays
 together. `exit` or Ctrl-D quits; Ctrl-C cancels the current line or the
-running task. Input history is kept in `~/.pyagent_history`.
+running task. Input history is kept in `~/.green_agent_history`.
 
 One-shot mode (`-t`) prints the same output and exits with code 0 on success
 and 1 when the task failed or ran out of steps.
@@ -169,7 +169,7 @@ so the agent can verify its own work the way you would:
 
 ```toml
 # pyproject.toml
-[tool.pyagent]
+[tool.green-agent]
 check = "ruff check . && pytest -q"
 ```
 

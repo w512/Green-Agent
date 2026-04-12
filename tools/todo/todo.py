@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from agent.params import require_text, text
+
 if TYPE_CHECKING:
     from agent.tools import Environment
 
@@ -15,13 +17,9 @@ def normalize_item(item: object, index: int) -> tuple[str, str, str]:
     where = f"todos[{index}]"
     if not isinstance(item, dict):
         raise ValueError(f"{where} must be an object.")
-    item_id = item.get("id")
-    content = item.get("content")
+    item_id = require_text(item.get("id"), f"{where}.id")
+    content = text(item.get("content"), f"{where}.content")
     status = item.get("status")
-    if not isinstance(item_id, str) or not item_id:
-        raise ValueError(f"{where}.id must be a non-empty string.")
-    if not isinstance(content, str):
-        raise ValueError(f"{where}.content must be a string.")
     if status not in STATUSES:
         allowed = ", ".join(STATUSES)
         raise ValueError(f"{where}.status must be one of: {allowed}.")

@@ -2,7 +2,7 @@
   "type": "function",
   "function": {
     "name": "check",
-    "description": "Verify after edits. With path: syntax-check that file (.py, .json, .toml in-process; .js/.mjs/.cjs via node --check; .sh via bash -n) without needing approval. Without path: run the project's own check command, discovered from pyproject.toml [tool.pyagent] check, package.json scripts.check, or a Makefile 'check' target.",
+    "description": "Verify after edits. With path: syntax-check that file (.py, .json, .toml in-process; .js/.mjs/.cjs via node --check; .sh via bash -n) without needing approval. Without path: run the project's own check command, discovered from pyproject.toml [tool.green-agent] check, package.json scripts.check, or a Makefile 'check' target.",
     "parameters": {
       "type": "object",
       "properties": {

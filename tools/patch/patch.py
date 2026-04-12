@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from agent.params import require_text
+from agent.params import require_text, text
 from agent.textfile import atomic_write_file, read_text_file, replace_unique
 
 if TYPE_CHECKING:
@@ -20,12 +20,8 @@ def _hunks(args: dict[str, Any]) -> list[tuple[str, str]]:
         where = f"hunks[{index}]"
         if not isinstance(hunk, dict):
             raise ValueError(f"{where} must be an object.")
-        old_text = hunk.get("old_text")
-        new_text = hunk.get("new_text")
-        if not isinstance(old_text, str) or not old_text:
-            raise ValueError(f"{where}.old_text must be a non-empty string.")
-        if not isinstance(new_text, str):
-            raise ValueError(f"{where}.new_text must be a string.")
+        old_text = require_text(hunk.get("old_text"), f"{where}.old_text")
+        new_text = text(hunk.get("new_text"), f"{where}.new_text")
         result.append((old_text, new_text))
     return result
 

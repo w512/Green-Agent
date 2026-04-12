@@ -44,6 +44,18 @@ class Approver(Protocol):
     def approve(self, tool: Tool, args: Args) -> bool: ...
 
 
+class ModelProvider(Protocol):
+    """What the loop needs from an LLM client (see agent.llm.Provider)."""
+
+    model: str
+
+    def respond(
+        self,
+        messages: Sequence[Message],
+        tools: Sequence[dict[str, Any]] | None = None,
+    ) -> Any: ...
+
+
 class AgentError(Exception):
     """The loop stopped abnormally; `messages` holds the history so far."""
 
@@ -201,7 +213,7 @@ def initial_messages(
 def run_agent(
     task: str,
     *,
-    provider: Any,
+    provider: ModelProvider,
     registry: dict[str, Tool],
     permissions: Approver,
     max_steps: int = DEFAULT_MAX_STEPS,

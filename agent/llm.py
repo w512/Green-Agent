@@ -49,7 +49,7 @@ def unique(values: Iterable[object]) -> list[str]:
     return seen
 
 
-def require_text(value: object, name: str) -> str:
+def require_setting(value: object, name: str) -> str:
     text = value.strip() if isinstance(value, str) else ""
     if text:
         return text
@@ -145,9 +145,9 @@ def create_provider(
     if settings is None:
         import config as settings  # noqa: PLC0415
 
-    api_key = require_text(getattr(settings, "API_KEY", None), "API_KEY")
-    base_url = require_text(getattr(settings, "BASE_URL", None), "BASE_URL")
-    model = require_text(getattr(settings, "MODEL", None), "MODEL")
+    api_key = require_setting(getattr(settings, "API_KEY", None), "API_KEY")
+    base_url = require_setting(getattr(settings, "BASE_URL", None), "BASE_URL")
+    model = require_setting(getattr(settings, "MODEL", None), "MODEL")
     fallbacks = unique(getattr(settings, "FALLBACK_MODELS", None) or [])
 
     if client is None:

@@ -4,24 +4,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from agent.params import require_text
+from agent.params import require_text, text
 from agent.textfile import atomic_write_file, read_text_file, replace_unique
 
 if TYPE_CHECKING:
     from agent.tools import Environment
 
 
-def line_count(text: str) -> int:
-    return text.count("\n") + (1 if text and not text.endswith("\n") else 0)
+def line_count(content: str) -> int:
+    ends_open = bool(content) and not content.endswith("\n")
+    return content.count("\n") + (1 if ends_open else 0)
 
 
 def _texts(args: dict[str, Any]) -> tuple[str, str]:
-    old_text = args.get("old_text")
-    new_text = args.get("new_text")
-    if not isinstance(old_text, str) or not old_text:
-        raise ValueError("old_text must be a non-empty string.")
-    if not isinstance(new_text, str):
-        raise ValueError("new_text must be a string.")
+    old_text = require_text(args.get("old_text"), "old_text")
+    new_text = text(args.get("new_text"), "new_text")
     if old_text == new_text:
         raise ValueError("old_text and new_text are identical; nothing to do.")
     return old_text, new_text

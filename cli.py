@@ -20,7 +20,7 @@ from agent.render import compact_args, preview
 from agent.session import Session
 
 PASTE_WINDOW_SECONDS = 0.05
-HISTORY_FILE = Path.home() / ".pyagent_history"
+HISTORY_FILE = Path.home() / ".green_agent_history"
 HISTORY_LENGTH = 1000
 EXIT_WORDS = frozenset({"exit", "quit", "/exit", "/quit"})
 

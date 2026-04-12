@@ -5,18 +5,22 @@ from __future__ import annotations
 import math
 
 
+def text(value: object, name: str) -> str:
+    """A string; empty is fine (replacement text, file content)."""
+    if not isinstance(value, str):
+        raise ValueError(f"{name} must be a string.")
+    return value
+
+
 def require_text(value: object, name: str) -> str:
+    """A non-empty string (paths, patterns, ids)."""
     if not isinstance(value, str) or not value:
         raise ValueError(f"{name} must be a non-empty string.")
     return value
 
 
 def optional_text(value: object, name: str) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ValueError(f"{name} must be a string.")
-    return value
+    return None if value is None else text(value, name)
 
 
 def optional_int(value: object, name: str, default: int) -> int:

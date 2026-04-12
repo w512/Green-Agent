@@ -10,7 +10,6 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
 
 from agent.agent import (
     DEFAULT_MAX_STEPS,
@@ -18,6 +17,7 @@ from agent.agent import (
     Approver,
     Event,
     Message,
+    ModelProvider,
     OnEvent,
     run_agent,
 )
@@ -52,7 +52,7 @@ class Session:
     def __init__(
         self,
         *,
-        provider: Any,
+        provider: ModelProvider,
         registry: dict[str, Tool],
         permissions: Approver,
         max_steps: int = DEFAULT_MAX_STEPS,

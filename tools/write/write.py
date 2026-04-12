@@ -5,7 +5,7 @@ from __future__ import annotations
 import stat
 from typing import TYPE_CHECKING, Any
 
-from agent.params import require_text
+from agent.params import require_text, text
 from agent.textfile import atomic_write_file
 
 if TYPE_CHECKING:
@@ -18,13 +18,6 @@ def human_size(size: int) -> str:
     if size < 1024 * 1024:
         return f"{size / 1024:.1f} KB"
     return f"{size / (1024 * 1024):.1f} MB"
-
-
-def _content(args: dict[str, Any]) -> str:
-    content = args.get("content")
-    if not isinstance(content, str):
-        raise ValueError("content must be a string.")
-    return content
 
 
 class WriteTool:
@@ -51,7 +44,7 @@ class WriteTool:
 
     def execute(self, args: dict[str, Any]) -> str:
         relative = require_text(args.get("path"), "path")
-        content = _content(args)
+        content = text(args.get("content"), "content")
 
         file_path = self.workspace.resolve_writable_file(relative)
         file_path.parent.mkdir(parents=True, exist_ok=True)

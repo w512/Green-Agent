@@ -282,7 +282,13 @@ def parse_answer(answer: str) -> Decision:
 
 
 class Permissions:
-    """`ask` is the frontend's prompt: description -> Decision."""
+    """`ask` is the frontend's prompt: description -> Decision.
+
+    `trust_root` defaults to the workspace root when the workspace lives
+    in a git repository (git can undo changes there); pass a path to
+    trust a different directory. Outside git there is no trust root and
+    every write or command asks.
+    """
 
     def __init__(
         self,
@@ -290,16 +296,14 @@ class Permissions:
         ask: Ask,
         *,
         auto_approve: bool = False,
-        trust_root: Path | None | str = "auto",
+        trust_root: Path | None = None,
     ) -> None:
         self.workspace = workspace
         self.auto_approve = auto_approve
         self._ask = ask
-        if trust_root == "auto":
-            trust_root = workspace.root if workspace.git_root else None
-        self.trust_root: Path | None = (
-            Path(trust_root) if isinstance(trust_root, (str, Path)) else None
-        )
+        if trust_root is None and workspace.git_root is not None:
+            trust_root = workspace.root
+        self.trust_root = trust_root
         self._always: set[str] = set()
 
     def approve(self, tool: Tool, args: Args) -> bool:

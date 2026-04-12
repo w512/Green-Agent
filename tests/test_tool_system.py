@@ -203,7 +203,7 @@ class TestCheckProject:
 
     def test_pyproject(self, check: Tool, project: Path) -> None:
         (project / "pyproject.toml").write_text(
-            '[tool.pyagent]\ncheck = "echo pyproject-check"\n'
+            '[tool.green-agent]\ncheck = "echo pyproject-check"\n'
         )
         assert check.describe({}) == "check: echo pyproject-check"
         assert check.execute({}) == "exit_code: 0\nstdout:\npyproject-check"
@@ -221,7 +221,9 @@ class TestCheckProject:
             assert check.execute({}) == "exit_code: 0\nstdout:\nmake-check"
 
     def test_pyproject_wins(self, check: Tool, project: Path) -> None:
-        (project / "pyproject.toml").write_text('[tool.pyagent]\ncheck = "a"\n')
+        (project / "pyproject.toml").write_text(
+            '[tool.green-agent]\ncheck = "a"\n'
+        )
         (project / "Makefile").write_text("check:\n\ttrue\n")
         assert check.describe({}) == "check: a"
 

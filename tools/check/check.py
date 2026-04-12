@@ -82,7 +82,7 @@ def _pyproject_check(root: Path) -> str | None:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    command = data.get("tool", {}).get("pyagent", {}).get("check")
+    command = data.get("tool", {}).get("green-agent", {}).get("check")
     return command if isinstance(command, str) and command.strip() else None
 
 
@@ -124,7 +124,7 @@ def project_check_command(root: Path) -> str | None:
 
 NO_PROJECT_CHECK = (
     "No project check command found. Define one in pyproject.toml "
-    '([tool.pyagent] check = "..."), package.json (scripts.check), or a '
+    '([tool.green-agent] check = "..."), package.json (scripts.check), or a '
     "Makefile 'check' target; or run tests and linters directly with bash."
 )
 

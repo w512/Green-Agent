@@ -33,11 +33,12 @@ from textual.widgets import (
 )
 from textual.widgets.tree import TreeNode
 
-from agent.agent import DEFAULT_MAX_STEPS
+from agent.agent import DEFAULT_MAX_STEPS, ModelProvider
 from agent.permissions import Decision, Permissions
 from agent.render import compact_args, preview
 from agent.session import Outcome, Session
 from agent.textfile import TextFileError, read_text_file
+from agent.tools import Tool
 from agent.walk import is_skipped_name
 from agent.workspace import Workspace
 
@@ -298,8 +299,8 @@ class AgentApp(App[int]):
     def __init__(
         self,
         *,
-        provider: Any,
-        registry: dict[str, Any],
+        provider: ModelProvider,
+        registry: dict[str, Tool],
         workspace: Workspace,
         auto_approve: bool = False,
         max_steps: int = DEFAULT_MAX_STEPS,
@@ -501,8 +502,8 @@ class AgentApp(App[int]):
 
 def run_tui(
     *,
-    provider: Any,
-    registry: dict[str, Any],
+    provider: ModelProvider,
+    registry: dict[str, Tool],
     workspace: Workspace,
     auto_approve: bool = False,
     max_steps: int = DEFAULT_MAX_STEPS,

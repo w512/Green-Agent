@@ -27,7 +27,7 @@ from agent.workspace import Workspace
 
 TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
 FACTORY_NAME = "create_tool"
-MODULE_PREFIX = "pyagent_tools"
+MODULE_PREFIX = "green_agent_tools"
 
 Args = dict[str, Any]
 TrustKind = str  # "path" | "command" | "always"

@@ -190,7 +190,7 @@ class TestDiscovery:
         )
         with pytest.raises(RuntimeError, match="boom"):
             load_tools(env, tools_dir)
-        assert "pyagent_tools.broken" not in sys.modules
+        assert "green_agent_tools.broken" not in sys.modules
 
     def test_factory_receives_environment(
         self, tmp_path: Path, env: Environment
