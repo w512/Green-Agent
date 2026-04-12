@@ -9,6 +9,7 @@ from __future__ import annotations
 import atexit
 import contextlib
 import os
+import re
 import select
 import sys
 from collections.abc import Callable
@@ -23,6 +24,7 @@ PASTE_WINDOW_SECONDS = 0.05
 HISTORY_FILE = Path.home() / ".green_agent_history"
 HISTORY_LENGTH = 1000
 EXIT_WORDS = frozenset({"exit", "quit", "/exit", "/quit"})
+COMMAND_RE = re.compile(r"/[A-Za-z]+")
 
 HELP = """Commands:
   /new            start a new conversation (forget the history)
@@ -199,10 +201,15 @@ class Chat:
         return True
 
     def handle_command(self, line: str) -> bool:
-        """Handle a slash command; False when `line` is not a command."""
-        if not line.startswith("/"):
-            return False
+        """Handle a slash command; False when `line` is not a command.
+
+        Only a bare word after the slash counts (`/help`, `/hlep`), so a
+        task that starts with a path (`/src/app.py: what is this?`) is
+        still sent to the model.
+        """
         command, _, argument = line.partition(" ")
+        if not COMMAND_RE.fullmatch(command):
+            return False
         argument = argument.strip()
         if command == "/help":
             self.out(HELP)

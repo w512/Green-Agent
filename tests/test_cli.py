@@ -371,6 +371,9 @@ class TestChat:
         chat, lines = make_chat([])
         chat.session.registry = {"read": None, "grep": None}
         assert chat.handle_command("plain text") is False
+        assert chat.handle_command("/src/app.py: what is this?") is False
+        assert chat.handle_command("/etc/hosts") is False
+        assert chat.handle_command("/") is False
         assert chat.handle_command("/help") is True
         assert lines[-1].startswith("Commands:")
         chat.handle_command("/tools")
@@ -448,9 +451,7 @@ class TestStart:
         def fake_create_provider(**_kwargs: Any) -> FakeProvider:
             return holder["provider"]
 
-        import agent.llm
-
-        monkeypatch.setattr(agent.llm, "create_provider", fake_create_provider)
+        monkeypatch.setattr(start, "create_provider", fake_create_provider)
         (tmp_path / "ws").mkdir()
         (tmp_path / "ws" / "note.txt").write_text("hello\n")
         holder["root"] = str(tmp_path / "ws")
@@ -487,7 +488,7 @@ class TestStart:
         capsys: pytest.CaptureFixture,
     ) -> None:
         wired["provider"] = FakeProvider([])
-        monkeypatch.setattr("cli.setup_readline", lambda: False)
+        monkeypatch.setattr(start, "setup_readline", lambda: False)
         monkeypatch.setattr("cli.read_task", lambda _p: None)
         assert start.main([wired["root"]]) == 0
         out = capsys.readouterr().out
@@ -498,13 +499,11 @@ class TestStart:
     def test_missing_config_is_reported(
         self, wired: dict[str, Any], capsys: pytest.CaptureFixture
     ) -> None:
-        import agent.llm
-
         def fail(**_kwargs: Any) -> None:
-            raise agent.llm.ConfigError("API_KEY is not set.")
+            raise start.ConfigError("API_KEY is not set.")
 
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr(agent.llm, "create_provider", fail)
+            mp.setattr(start, "create_provider", fail)
             assert start.main(["-t", "hi", wired["root"]]) == 1
         out = capsys.readouterr().out
         assert "API_KEY is not set." in out

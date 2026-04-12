@@ -9,6 +9,12 @@ import sys
 from pathlib import Path
 
 from agent.agent import DEFAULT_MAX_STEPS
+from agent.llm import ConfigError, create_provider
+from agent.permissions import Permissions
+from agent.session import Session
+from agent.tools import Environment, load_tools
+from agent.workspace import Workspace
+from cli import Chat, Palette, console_ask, setup_readline
 
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = BASE_DIR / "config.py"
@@ -93,14 +99,6 @@ def resolve_root(arg: str | None) -> Path:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     created = ensure_config()
-
-    from agent.llm import ConfigError, create_provider
-    from agent.permissions import Permissions
-    from agent.session import Session
-    from agent.tools import Environment, load_tools
-    from agent.workspace import Workspace
-    from cli import Chat, Palette, console_ask, setup_readline
-
     palette = Palette()
     if created:
         print(palette.warn(f"Created {CONFIG_PATH.name}"))
@@ -119,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.tui:
         try:
-            from tui import run_tui
+            from tui import run_tui  # optional dependency (Textual)
         except ImportError:
             print(palette.error("The TUI needs Textual: uv sync --extra tui"))
             return 1

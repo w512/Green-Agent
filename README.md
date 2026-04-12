@@ -218,6 +218,7 @@ agent/session.py     conversation history, per-task outcome (shared by UIs)
 agent/llm.py         Chat Completions client: retries, model fallback
 agent/tools.py       tool registry
 agent/permissions.py approval policy
+agent/shellcheck.py  shell command heuristics (dangerous? stays inside?)
 agent/workspace.py   path containment
 agent/command.py     subprocess runner
 tools/{name}/        one directory per tool: {name}.json + {name}.py

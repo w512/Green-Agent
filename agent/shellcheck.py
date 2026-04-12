@@ -1,0 +1,247 @@
+"""Shell command heuristics for the approval policy.
+
+Two questions about a command line the model wants to run:
+
+- `dangerous_command`: does it contain something that must always be
+  confirmed (privilege escalation, network transfer, destructive git,
+  `rm -rf`, inline interpreters, ...)? Returns the reason or None.
+- `command_stays_inside`: do all path-like tokens stay under a root, with
+  no variables or substitutions to hide behind? Only then can git undo
+  whatever the command does inside a repository.
+
+Both work on a shlex tokenization split at `;`, `|`, `&&`, and friends,
+with leading assignments and wrappers (`env`, `time`, `xargs`, ...)
+stripped so the real command name is inspected.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import shlex
+from collections.abc import Iterator
+from pathlib import Path
+
+from agent.workspace import is_inside
+
+# --- tokenization -----------------------------------------------------------
+
+SEPARATORS = frozenset({";", "|", "||", "&&", "&", "(", ")"})
+REDIRECTS = frozenset({"<", ">", ">>", "<<", "<<<", "<>", ">|"})
+WRAPPERS = frozenset(
+    {"env", "time", "nice", "nohup", "command", "builtin", "exec", "xargs"}
+)
+# nice -n 5, xargs -I {} / -n 1 / -P 4, env -u VAR / -C dir ...
+WRAPPER_FLAGS_WITH_VALUE = frozenset(
+    {"-n", "-I", "-P", "-L", "-d", "-E", "-u", "-C", "-s", "-a"}
+)
+ASSIGNMENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*", re.DOTALL)
+OPAQUE_RE = re.compile(r"[$`]")
+
+ALWAYS_ASK = frozenset(
+    {
+        # privilege
+        "sudo",
+        "su",
+        "doas",
+        # network transfer / remote execution
+        "curl",
+        "wget",
+        "ssh",
+        "scp",
+        "sftp",
+        "rsync",
+        "nc",
+        "ncat",
+        "telnet",
+        "ftp",
+        # disks and system state
+        "dd",
+        "mkfs",
+        "fdisk",
+        "diskutil",
+        "shred",
+        "shutdown",
+        "reboot",
+        "halt",
+        "poweroff",
+        "kill",
+        "pkill",
+        "killall",
+        "crontab",
+        "launchctl",
+        "systemctl",
+        "chown",
+        "eval",
+    }
+)
+GIT_ALWAYS_ASK = frozenset(
+    {"push", "reset", "clean", "rebase", "restore", "filter-branch", "gc"}
+)
+GIT_CHECKOUT_DISCARD = frozenset({"--", ".", "-f", "--force", "-p", "--patch"})
+GIT_DELETE_FLAGS = frozenset({"-d", "-D", "--delete"})
+SHELLS = frozenset({"sh", "bash", "zsh", "dash", "ksh", "fish"})
+INTERPRETERS = frozenset({"node", "perl", "ruby", "php"})
+FIND_ACTIONS = frozenset({"-delete", "-exec", "-execdir", "-ok", "-okdir"})
+RM_FLAG_RE = re.compile(r"-[a-zA-Z]*[rRf][a-zA-Z]*")
+
+
+def tokenize(command: str) -> list[str]:
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    try:
+        return list(lexer)
+    except ValueError:  # unbalanced quotes: degrade to whitespace split
+        return command.split()
+
+
+def simple_commands(tokens: list[str]) -> Iterator[tuple[str, list[str]]]:
+    """Yield (command_name, args) for each simple command in a pipeline."""
+    words: list[str] = []
+    skip_next = False
+    for token in [*tokens, ";"]:
+        if skip_next:
+            skip_next = False
+            continue
+        if token in REDIRECTS:
+            skip_next = True
+            continue
+        if token in SEPARATORS:
+            if words:
+                yield from _unwrap(words)
+            words = []
+            continue
+        words.append(token)
+
+
+def _unwrap(words: list[str]) -> Iterator[tuple[str, list[str]]]:
+    index = 0
+    while index < len(words):
+        word = words[index]
+        if ASSIGNMENT_RE.fullmatch(word):
+            index += 1
+            continue
+        name = os.path.basename(word)
+        if name in WRAPPERS:
+            index += 1
+            while index < len(words) and words[index].startswith("-"):
+                takes_value = words[index] in WRAPPER_FLAGS_WITH_VALUE
+                index += 2 if takes_value else 1
+            continue
+        yield name, words[index + 1 :]
+        return
+
+
+GIT_GLOBAL_FLAGS_WITH_VALUE = frozenset(
+    {"-C", "-c", "--git-dir", "--work-tree"}
+)
+
+
+def _git_subcommand(args: list[str]) -> tuple[str, list[str]] | None:
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg in GIT_GLOBAL_FLAGS_WITH_VALUE:
+            index += 2
+            continue
+        if arg.startswith("-"):
+            index += 1
+            continue
+        return arg, args[index + 1 :]
+    return None
+
+
+def _git_reason(args: list[str]) -> str | None:
+    found = _git_subcommand(args)
+    if found is None:
+        return None
+    sub, rest = found
+    if sub in GIT_ALWAYS_ASK:
+        return f"git {sub}"
+    if sub == "checkout" and any(
+        arg in GIT_CHECKOUT_DISCARD or "/" in arg for arg in rest
+    ):
+        return "git checkout may discard changes"
+    if sub in {"branch", "tag"} and any(
+        arg in GIT_DELETE_FLAGS for arg in rest
+    ):
+        return f"git {sub} delete"
+    if sub == "stash" and any(arg in {"drop", "clear"} for arg in rest):
+        return "git stash drop"
+    return None
+
+
+def dangerous_reason(name: str, args: list[str]) -> str | None:
+    if name in ALWAYS_ASK:
+        return name
+    if name == "rm" and any(RM_FLAG_RE.fullmatch(a) for a in args):
+        return "rm -r/-f"
+    if name == "rm" and ("--recursive" in args or "--force" in args):
+        return "rm -r/-f"
+    if name == "git":
+        return _git_reason(args)
+    if name == "chmod" and any(a.startswith("-") and "R" in a for a in args):
+        return "chmod -R"
+    if name == "find" and any(a in FIND_ACTIONS for a in args):
+        return "find -delete/-exec"
+    if name in SHELLS and "-c" in args:
+        return f"{name} -c"
+    inline = name in INTERPRETERS or name.startswith("python")
+    if inline and any(a in {"-c", "-e"} for a in args):
+        return f"{name} -c"
+    return None
+
+
+def dangerous_command(command: str) -> str | None:
+    """Reason a command must always be confirmed, or None."""
+    for name, args in simple_commands(tokenize(command)):
+        reason = dangerous_reason(name, args)
+        if reason:
+            return reason
+    return None
+
+
+# --- path containment -------------------------------------------------------
+
+
+def looks_like_path(token: str) -> bool:
+    if not token or "://" in token:
+        return False
+    if token in {".", ".."} or token[0] in "~/":
+        return True
+    if token.startswith(("./", "../")):
+        return True
+    return "/" in token or "\\" in token
+
+
+def unwrap_assignment(token: str) -> str:
+    _key, sep, value = token.partition("=")
+    if sep and value and looks_like_path(value):
+        return value
+    return token
+
+
+def resolve_against(cwd: Path, token: str) -> Path:
+    if token == "~":
+        return Path.home()
+    if token.startswith(("~/", "~\\")):
+        return Path.home() / token[2:]
+    return Path(os.path.abspath(cwd / token))
+
+
+SAFE_PATHS = frozenset({"/dev/null", "/dev/stdout", "/dev/stderr"})
+
+
+def command_stays_inside(root: Path, cwd: Path, command: str) -> bool:
+    """False if any path-like token leaves `root` or paths are opaque."""
+    if OPAQUE_RE.search(command):
+        return False
+    for token in tokenize(command):
+        candidate = unwrap_assignment(token)
+        if candidate in SAFE_PATHS:
+            continue
+        if not looks_like_path(token) and not looks_like_path(candidate):
+            continue
+        if not is_inside(root, resolve_against(cwd, candidate)):
+            return False
+    return True
