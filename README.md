@@ -5,6 +5,8 @@ it reads the code, searches it, makes edits, and runs your tests — asking
 before anything risky. Works with any OpenAI-compatible API: OpenAI, Gemini,
 Ollama (cloud or local), or a self-hosted server.
 
+![Green Agent in full-screen mode: project tree, file viewer, chat](assets/tui.png)
+
 - Understands the project through `read`, `grep`, and `glob` before touching
   anything; edits with precise, unique-match replacements rather than rewriting
   files.
@@ -103,10 +105,11 @@ and 1 when the task failed or ran out of steps.
 python start.py --tui [project-dir]
 ```
 
-Three panes: the project tree on the left (Enter or click opens a file), a
-syntax-highlighted file viewer that reloads when the agent edits the open
-file, and the chat with the agent's replies rendered as Markdown. Approvals
-appear as a dialog: `y` allow once, `a` allow for the session, `n`/Esc deny.
+Three panes (see the screenshot above): the project tree on the left (Enter
+or click opens a file), a syntax-highlighted file viewer that reloads when
+the agent edits the open file, and the chat with the agent's replies rendered
+as Markdown. Approvals appear as a dialog: `y` allow once, `a` allow for the
+session, `n`/Esc deny.
 
 | Key | Action |
 |-----|--------|
